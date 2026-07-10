@@ -86,6 +86,8 @@ defmodule PinchflatWeb.Router do
     get "/sources/:source_id/media/by-youtube-id/:youtube_id", SourceSyncController, :show_media_by_youtube_id
     post "/sources/:source_id/media/status", SourceSyncController, :media_status
     get "/sources/:source_id/youtube/search", YoutubeController, :search
+    get "/sources/:source_id/youtube/music/albums/:browse_id", YoutubeController, :album
+    get "/sources/:source_id/youtube/music/artists/:browse_id", YoutubeController, :artist
     get "/sources/:source_id/media/history", YoutubeController, :history
   end
 

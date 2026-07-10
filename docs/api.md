@@ -182,6 +182,107 @@ Only results with a `youtube_id` include `pinchflat_status`. Album, artist, and 
 
 `pinchflat_status.in_source` means Pinchflat already knows that media item for the requested Source. It is derived from Pinchflat's database, not from a live YouTube playlist lookup. If the playlist was changed recently but has not been indexed yet, a video can still return `unknown`.
 
+### YouTube Music Album
+
+```http
+GET /api/v1/sources/:source_id/youtube/music/albums/:browse_id
+```
+
+Returns album metadata and importable tracks. `browse_id` comes from search results with `type: "album"` or `album_id`.
+
+Response:
+
+```json
+{
+  "album": {
+    "type": "album",
+    "browse_id": "MPRE...",
+    "title": "Album title",
+    "artist": "Artist",
+    "description": "...",
+    "thumbnail_url": "https://...",
+    "tracks": [
+      {
+        "type": "song",
+        "youtube_id": "LdQU46djcAA",
+        "title": "Track title",
+        "artist": "Artist",
+        "album_id": "MPRE...",
+        "track_number": 1,
+        "duration": "3:45",
+        "thumbnail_url": null,
+        "pinchflat_status": {
+          "source_id": 2,
+          "status": "unknown",
+          "in_source": false,
+          "already_downloaded": false,
+          "media_id": null,
+          "media_uuid": null,
+          "downloaded_at": null,
+          "filepath": null,
+          "last_error": null
+        }
+      }
+    ]
+  }
+}
+```
+
+### YouTube Music Artist
+
+```http
+GET /api/v1/sources/:source_id/youtube/music/artists/:browse_id
+```
+
+Returns artist metadata and first-page sections from YouTube Music. `browse_id` comes from search results with `type: "artist"` or `artist_id`.
+
+Response:
+
+```json
+{
+  "artist": {
+    "type": "artist",
+    "browse_id": "UC...",
+    "title": "Artist",
+    "description": "...",
+    "thumbnail_url": "https://...",
+    "top_songs": [
+      {
+        "type": "song",
+        "youtube_id": "LdQU46djcAA",
+        "title": "Song title",
+        "artist": "Artist",
+        "duration": "3:45",
+        "thumbnail_url": "https://...",
+        "pinchflat_status": {
+          "source_id": 2,
+          "status": "unknown",
+          "in_source": false,
+          "already_downloaded": false,
+          "media_id": null,
+          "media_uuid": null,
+          "downloaded_at": null,
+          "filepath": null,
+          "last_error": null
+        }
+      }
+    ],
+    "albums": [
+      {
+        "type": "album",
+        "browse_id": "MPRE...",
+        "title": "Album title",
+        "thumbnail_url": "https://..."
+      }
+    ],
+    "singles": [],
+    "videos": []
+  }
+}
+```
+
+Playable artist items with `youtube_id`, currently `top_songs` and `videos`, include `pinchflat_status`. Album and single cards should be opened with the album endpoint using their `browse_id`.
+
 ### Source Media History
 
 ```http

@@ -155,6 +155,76 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
     end
   end
 
+  describe "GET /api/v1/sources/:id/youtube/music/albums/:browse_id" do
+    test "returns album details with track statuses", %{conn: conn} do
+      source = playlist_source_fixture()
+      media_item = media_item_fixture(source_id: source.id, media_id: @youtube_id)
+
+      expect_browse_request("MPRE123", album_payload())
+
+      conn =
+        conn
+        |> api_auth()
+        |> get("/api/v1/sources/#{source.id}/youtube/music/albums/MPRE123")
+
+      assert %{
+               "album" => %{
+                 "type" => "album",
+                 "browse_id" => "MPRE123",
+                 "title" => "Album",
+                 "artist" => "Artist",
+                 "tracks" => [
+                   %{
+                     "type" => "song",
+                     "youtube_id" => @youtube_id,
+                     "title" => "Song title",
+                     "duration" => "3:45",
+                     "track_number" => 1,
+                     "pinchflat_status" => %{"media_id" => media_item_id, "status" => "completed"}
+                   }
+                 ]
+               }
+             } = json_response(conn, 200)
+
+      assert media_item_id == media_item.id
+    end
+  end
+
+  describe "GET /api/v1/sources/:id/youtube/music/artists/:browse_id" do
+    test "returns artist sections with statuses for playable items", %{conn: conn} do
+      source = playlist_source_fixture()
+
+      expect_browse_request("UC123", artist_payload())
+
+      conn =
+        conn
+        |> api_auth()
+        |> get("/api/v1/sources/#{source.id}/youtube/music/artists/UC123")
+
+      assert %{
+               "artist" => %{
+                 "type" => "artist",
+                 "browse_id" => "UC123",
+                 "title" => "Artist",
+                 "top_songs" => [
+                   %{
+                     "youtube_id" => @youtube_id,
+                     "title" => "Song title",
+                     "pinchflat_status" => %{"status" => "unknown"}
+                   }
+                 ],
+                 "albums" => [
+                   %{
+                     "type" => "album",
+                     "browse_id" => "MPRE123",
+                     "title" => "Album"
+                   }
+                 ]
+               }
+             } = json_response(conn, 200)
+    end
+  end
+
   describe "GET /api/v1/sources/:id/media/history" do
     test "returns recent media for a source", %{conn: conn} do
       source = playlist_source_fixture()
@@ -258,6 +328,18 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
     end)
   end
 
+  defp expect_browse_request(browse_id, payload) do
+    expect(HTTPClientMock, :post, fn url, body, headers, _opts ->
+      assert url == "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false"
+      assert %{browseId: ^browse_id, context: %{client: %{clientName: "WEB_REMIX"}}} = Jason.decode!(body, keys: :atoms)
+      assert headers[:accept] == "application/json"
+      assert headers[:"content-type"] == "application/json"
+      assert headers[:origin] == "https://music.youtube.com"
+
+      {:ok, Jason.encode!(payload)}
+    end)
+  end
+
   defp youtube_music_song do
     %{
       musicResponsiveListItemRenderer: %{
@@ -319,6 +401,106 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
              }
            }
         ]
+      }
+    }
+  end
+
+  defp album_payload do
+    %{
+      microformat: %{
+        microformatDataRenderer: %{
+          title: "Album - Album by Artist",
+          description: "Album description",
+          thumbnail: %{thumbnails: [%{url: "https://example.com/album.jpg", width: 544}]}
+        }
+      },
+      contents: %{
+        twoColumnBrowseResultsRenderer: %{
+          secondaryContents: %{
+            sectionListRenderer: %{
+              contents: [
+                %{
+                  musicShelfRenderer: %{
+                    contents: [
+                      album_track()
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  end
+
+  defp artist_payload do
+    %{
+      header: %{
+        musicImmersiveHeaderRenderer: %{
+          title: %{runs: [%{text: "Artist"}]}
+        }
+      },
+      microformat: %{
+        microformatDataRenderer: %{
+          title: "Artist",
+          description: "Artist description",
+          thumbnail: %{thumbnails: [%{url: "https://example.com/artist.jpg", width: 544}]}
+        }
+      },
+      contents: %{
+        singleColumnBrowseResultsRenderer: %{
+          tabs: [
+            %{
+              tabRenderer: %{
+                selected: true,
+                content: %{
+                  sectionListRenderer: %{
+                    contents: [
+                      %{musicShelfRenderer: %{title: %{runs: [%{text: "Top songs"}]}, contents: [youtube_music_song()]}},
+                      %{musicShelfRenderer: %{title: %{runs: [%{text: "Albums"}]}, contents: [artist_album()]}}
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  end
+
+  defp album_track do
+    %{
+      musicResponsiveListItemRenderer: %{
+        playlistItemData: %{videoId: @youtube_id},
+        index: %{runs: [%{text: "1"}]},
+        fixedColumns: [
+          %{
+            musicResponsiveListItemFixedColumnRenderer: %{
+              text: %{runs: [%{text: "3:45"}]}
+            }
+          }
+        ],
+        flexColumns: [
+          %{
+            musicResponsiveListItemFlexColumnRenderer: %{
+              text: %{runs: [%{text: "Song title", navigationEndpoint: %{watchEndpoint: %{videoId: @youtube_id}}}]}
+            }
+          }
+        ]
+      }
+    }
+  end
+
+  defp artist_album do
+    %{
+      musicTwoRowItemRenderer: %{
+        title: %{runs: [%{text: "Album"}]},
+        navigationEndpoint: %{browseEndpoint: %{browseId: "MPRE123"}},
+        thumbnailRenderer: %{
+          musicThumbnailRenderer: %{thumbnail: %{thumbnails: [%{url: "https://example.com/album.jpg", width: 120}]}}
+        }
       }
     }
   end

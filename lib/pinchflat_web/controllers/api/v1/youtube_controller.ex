@@ -4,6 +4,7 @@ defmodule PinchflatWeb.Api.V1.YoutubeController do
   require Logger
 
   alias Pinchflat.Api
+  alias Pinchflat.Youtube.MusicBrowse
   alias Pinchflat.Youtube.Search
 
   def search(conn, %{"source_id" => source_id} = params) do
@@ -21,6 +22,26 @@ defmodule PinchflatWeb.Api.V1.YoutubeController do
          {:ok, limit} <- normalize_limit(Map.get(params, "limit", 25)),
          {:ok, items} <- Api.recent_media_for_source(source, limit: limit) do
       json(conn, %{items: items})
+    else
+      error -> render_error(conn, error)
+    end
+  end
+
+  def album(conn, %{"source_id" => source_id, "browse_id" => browse_id}) do
+    with {:ok, source} <- Api.get_source(source_id),
+         {:ok, album} <- MusicBrowse.album(browse_id),
+         {:ok, tracks} <- with_statuses(source, Map.get(album, :tracks, [])) do
+      json(conn, %{album: Map.put(album, :tracks, tracks)})
+    else
+      error -> render_error(conn, error)
+    end
+  end
+
+  def artist(conn, %{"source_id" => source_id, "browse_id" => browse_id}) do
+    with {:ok, source} <- Api.get_source(source_id),
+         {:ok, artist} <- MusicBrowse.artist(browse_id),
+         {:ok, artist} <- merge_artist_statuses(source, artist) do
+      json(conn, %{artist: artist})
     else
       error -> render_error(conn, error)
     end
@@ -48,6 +69,19 @@ defmodule PinchflatWeb.Api.V1.YoutubeController do
         status -> Map.put(item, :pinchflat_status, pinchflat_status(status, source_id))
       end
     end)
+  end
+
+  defp with_statuses(source, items) do
+    with {:ok, statuses} <- statuses_for_items(source, items) do
+      {:ok, merge_statuses(items, statuses, source.id)}
+    end
+  end
+
+  defp merge_artist_statuses(source, artist) do
+    with {:ok, top_songs} <- with_statuses(source, Map.get(artist, :top_songs, [])),
+         {:ok, videos} <- with_statuses(source, Map.get(artist, :videos, [])) do
+      {:ok, artist |> Map.put(:top_songs, top_songs) |> Map.put(:videos, videos)}
+    end
   end
 
   defp statuses_for_items(source, items) do
@@ -98,9 +132,13 @@ defmodule PinchflatWeb.Api.V1.YoutubeController do
     error(conn, :unprocessable_entity, "invalid_limit", "limit must be between 1 and 100")
   end
 
+  defp render_error(conn, {:error, :invalid_browse_id}) do
+    error(conn, :unprocessable_entity, "invalid_browse_id", "browse_id must not be empty")
+  end
+
   defp render_error(conn, {:error, reason}) do
-    Logger.error("YouTube search failed: #{inspect(reason)}")
-    error(conn, :bad_gateway, "youtube_search_failed", "YouTube search failed")
+    Logger.error("YouTube Music request failed: #{inspect(reason)}")
+    error(conn, :bad_gateway, "youtube_music_failed", "YouTube Music request failed")
   end
 
   defp error(conn, status, code, message, details \\ %{}) do

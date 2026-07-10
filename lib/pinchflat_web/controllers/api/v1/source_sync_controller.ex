@@ -112,6 +112,15 @@ defmodule PinchflatWeb.Api.V1.SourceSyncController do
     error(conn, :bad_gateway, "google_access_token_missing", "Google did not return an access token")
   end
 
+  defp render_error(conn, {:error, :google_reauthorization_required}) do
+    error(
+      conn,
+      :conflict,
+      "google_reauthorization_required",
+      "Google authorization expired or was revoked. Reconnect Google in Pinchflat settings."
+    )
+  end
+
   defp render_error(conn, {:error, {:youtube_api_error, reason}}) do
     Logger.error("YouTube API import failed: #{inspect(reason)}")
     error(conn, :bad_gateway, "youtube_api_error", "YouTube API request failed")

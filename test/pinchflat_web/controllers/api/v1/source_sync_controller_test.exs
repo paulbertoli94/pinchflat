@@ -246,6 +246,34 @@ defmodule PinchflatWeb.Api.V1.SourceSyncControllerTest do
 
       assert %{"status" => "queued", "imported_youtube_ids" => [@youtube_id]} = json_response(conn, 202)
     end
+
+    test "returns a reconnect error when the Google refresh token is expired or revoked", %{conn: conn} do
+      source = playlist_source_fixture(collection_id: "PL123")
+
+      {:ok, _setting} =
+        Settings.update_setting(Settings.record(), %{
+          google_oauth_client_id: "client-id",
+          google_oauth_client_secret: "client-secret",
+          google_oauth_refresh_token: "refresh-token",
+          google_oauth_connected_at: now()
+        })
+
+      expect(HTTPClientMock, :post, fn _url, _body, _headers, _opts ->
+        {:error, ~s({"error":"invalid_grant","error_description":"Token has been expired or revoked."})}
+      end)
+
+      conn =
+        conn
+        |> api_auth()
+        |> post("/api/v1/sources/#{source.id}/import", %{youtube_ids: [@youtube_id]})
+
+      assert %{
+               "error" => %{
+                 "code" => "google_reauthorization_required",
+                 "message" => "Google authorization expired or was revoked. Reconnect Google in Pinchflat settings."
+               }
+             } = json_response(conn, 409)
+    end
   end
 
   describe "GET /api/v1/sources/:id/media/by-youtube-id/:youtube_id" do

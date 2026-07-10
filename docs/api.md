@@ -118,6 +118,20 @@ Response:
 
 This endpoint uses Google OAuth to call YouTube `playlistItems.insert` for the playlist configured on the Pinchflat Source. Videos already present in the playlist are treated as successfully imported. After the playlist write, Pinchflat enqueues the same forced source indexing used by `/sync`.
 
+If Google authorization expires or is revoked, `/import` returns:
+
+```json
+{
+  "error": {
+    "code": "google_reauthorization_required",
+    "message": "Google authorization expired or was revoked. Reconnect Google in Pinchflat settings.",
+    "details": {}
+  }
+}
+```
+
+Tempus should show a reconnect-Google message and ask the user to reconnect Google in Pinchflat settings.
+
 ### Search YouTube
 
 ```http

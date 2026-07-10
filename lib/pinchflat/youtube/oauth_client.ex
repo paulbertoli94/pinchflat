@@ -84,9 +84,14 @@ defmodule Pinchflat.Youtube.OauthClient do
         grant_type: "refresh_token"
       })
 
-    with {:ok, response} <- http_client().post(@token_url, body, form_headers(), []),
-         {:ok, payload} <- Jason.decode(response) do
-      fetch_access_token(payload)
+    case http_client().post(@token_url, body, form_headers(), []) do
+      {:ok, response} ->
+        with {:ok, payload} <- Jason.decode(response) do
+          fetch_access_token(payload)
+        end
+
+      {:error, error} ->
+        google_token_error(error)
     end
   end
 
@@ -128,7 +133,18 @@ defmodule Pinchflat.Youtube.OauthClient do
   defp fetch_refresh_token(_payload), do: {:error, :google_refresh_token_missing}
 
   defp fetch_access_token(%{"access_token" => token}) when is_binary(token) and token != "", do: {:ok, token}
+  defp fetch_access_token(%{"error" => "invalid_grant"}), do: {:error, :google_reauthorization_required}
   defp fetch_access_token(_payload), do: {:error, :google_access_token_missing}
+
+  defp google_token_error(error) when is_binary(error) do
+    if String.contains?(error, "invalid_grant") do
+      {:error, :google_reauthorization_required}
+    else
+      {:error, {:youtube_api_error, error}}
+    end
+  end
+
+  defp google_token_error(error), do: {:error, {:youtube_api_error, error}}
 
   defp form_headers do
     [{"content-type", "application/x-www-form-urlencoded"}, {"accept", "application/json"}]

@@ -39,7 +39,7 @@ defmodule PinchflatWeb.SettingControllerTest do
                "media_status" => true,
                "sync" => true,
                "youtube_import" => false,
-               "youtube_search" => false
+               "youtube_search" => true
              }
 
       assert payload["default_source_id"] == source.id

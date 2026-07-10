@@ -138,9 +138,9 @@ Tempus should show a reconnect-Google message and ask the user to reconnect Goog
 GET /api/v1/sources/2/youtube/search?q=daft%20punk&max_results=10
 ```
 
-This endpoint requires YouTube API Key(s) in Pinchflat settings. Tempus can use it to search YouTube without receiving the raw API key in the QR code.
+This endpoint searches YouTube Music through Pinchflat. It does not require YouTube API Key(s), and Tempus does not receive any Google or YouTube credentials.
 
-Search is tuned for music by default. Pinchflat asks YouTube for video results in the Music category and medium duration videos, which usually fits songs better than generic YouTube search.
+Search is tuned for music by default. Pinchflat uses YouTube Music's internal web API and normalizes songs, videos, albums, artists, and playlists into a stable JSON shape for API clients. This is not an official Google API, so Pinchflat keeps the integration server-side.
 
 Response:
 
@@ -149,10 +149,16 @@ Response:
   "items": [
     {
       "youtube_id": "LdQU46djcAA",
+      "type": "song",
       "title": "Song title",
+      "artist": "Artist",
+      "artist_id": "UC123",
+      "album": "Album",
+      "album_id": "MPRE123",
+      "duration": "3:45",
       "channel_id": "UC123",
       "channel_title": "Artist",
-      "published_at": "2024-01-01T00:00:00Z",
+      "published_at": null,
       "thumbnail_url": "https://example.com/thumb.jpg",
       "pinchflat_status": {
         "source_id": 2,
@@ -169,6 +175,8 @@ Response:
   ]
 }
 ```
+
+Only results with a `youtube_id` include `pinchflat_status`. Album, artist, and playlist results may only have `browse_id`/`*_id` values because they are not directly importable YouTube videos.
 
 `max_results` defaults to `10` and must be between `1` and `25`.
 

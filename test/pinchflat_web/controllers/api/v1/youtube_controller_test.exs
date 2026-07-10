@@ -26,16 +26,18 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
       assert %{"error" => %{"code" => "unauthorized"}} = json_response(conn, 401)
     end
 
-    test "returns 409 when YouTube API key is not configured", %{conn: conn} do
+    test "searches without requiring a YouTube API key", %{conn: conn} do
       Settings.set(youtube_api_key: nil)
       source = playlist_source_fixture()
+
+      expect_search_request()
 
       conn =
         conn
         |> api_auth()
         |> get("/api/v1/sources/#{source.id}/youtube/search", %{q: "test"})
 
-      assert %{"error" => %{"code" => "youtube_api_key_not_configured"}} = json_response(conn, 409)
+      assert %{"items" => [%{"youtube_id" => @youtube_id}]} = json_response(conn, 200)
     end
 
     test "returns 422 when query is empty", %{conn: conn} do
@@ -66,9 +68,15 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
                  %{
                    "youtube_id" => @youtube_id,
                    "title" => "Song title",
+                   "type" => "song",
+                   "artist" => "Artist",
+                   "artist_id" => "UC123",
+                   "album" => "Album",
+                   "album_id" => "MPRE123",
+                   "duration" => "3:45",
                    "channel_id" => "UC123",
                    "channel_title" => "Artist",
-                   "published_at" => "2024-01-01T00:00:00Z",
+                   "published_at" => nil,
                    "thumbnail_url" => "https://example.com/thumb.jpg",
                    "pinchflat_status" => %{"status" => "unknown"}
                  }
@@ -184,33 +192,108 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
   end
 
   defp expect_search_request do
-    expect(HTTPClientMock, :get, fn url, headers ->
-      assert url =~ "https://youtube.googleapis.com/youtube/v3/search?"
-      assert url =~ "part=snippet"
-      assert url =~ "type=video"
-      assert url =~ "videoCategoryId=10"
-      assert url =~ "videoDuration=medium"
-      assert url =~ "maxResults=5"
-      assert url =~ "q=daft+punk"
-      assert url =~ "key=api-key"
-      assert headers == [accept: "application/json"]
+    expect(HTTPClientMock, :post, fn url, body, headers, _opts ->
+      assert url == "https://music.youtube.com/youtubei/v1/search?prettyPrint=false"
+      assert %{query: query, context: %{client: %{clientName: "WEB_REMIX"}}} = Jason.decode!(body, keys: :atoms)
+      assert query in ["daft punk", "test"]
+      assert headers[:accept] == "application/json"
+      assert headers[:"content-type"] == "application/json"
+      assert headers[:origin] == "https://music.youtube.com"
 
       {:ok,
        Jason.encode!(%{
-         items: [
-           %{
-             id: %{videoId: @youtube_id},
-             snippet: %{
-               title: "Song title",
-               channelId: "UC123",
-               channelTitle: "Artist",
-               publishedAt: "2024-01-01T00:00:00Z",
-               thumbnails: %{medium: %{url: "https://example.com/thumb.jpg"}}
-             }
+         contents: %{
+           tabbedSearchResultsRenderer: %{
+             tabs: [
+               %{
+                 tabRenderer: %{
+                   selected: true,
+                   content: %{
+                     sectionListRenderer: %{
+                       contents: [
+                         %{
+                           musicShelfRenderer: %{
+                             title: %{runs: [%{text: "Songs"}]},
+                             contents: [
+                               youtube_music_song()
+                             ]
+                           }
+                         }
+                       ]
+                     }
+                   }
+                 }
+               }
+             ]
            }
-         ]
+         }
        })}
     end)
+  end
+
+  defp youtube_music_song do
+    %{
+      musicResponsiveListItemRenderer: %{
+        thumbnail: %{
+          musicThumbnailRenderer: %{
+            thumbnail: %{
+              thumbnails: [
+                %{url: "https://example.com/small.jpg", width: 60},
+                %{url: "https://example.com/thumb.jpg", width: 120}
+              ]
+            }
+          }
+        },
+        playlistItemData: %{videoId: @youtube_id},
+        flexColumns: [
+          %{
+            musicResponsiveListItemFlexColumnRenderer: %{
+              text: %{
+                runs: [
+                  %{
+                    text: "Song title",
+                    navigationEndpoint: %{watchEndpoint: %{videoId: @youtube_id}}
+                  }
+                ]
+              }
+            }
+          },
+          %{
+            musicResponsiveListItemFlexColumnRenderer: %{
+              text: %{
+                runs: [
+                  %{
+                    text: "Artist",
+                    navigationEndpoint: %{
+                      browseEndpoint: %{
+                        browseId: "UC123",
+                        browseEndpointContextSupportedConfigs: %{
+                          browseEndpointContextMusicConfig: %{pageType: "MUSIC_PAGE_TYPE_ARTIST"}
+                        }
+                      }
+                    }
+                  },
+                  %{text: " • "},
+                  %{
+                    text: "Album",
+                    navigationEndpoint: %{
+                      browseEndpoint: %{
+                        browseId: "MPRE123",
+                        browseEndpointContextSupportedConfigs: %{
+                          browseEndpointContextMusicConfig: %{pageType: "MUSIC_PAGE_TYPE_ALBUM"}
+                        }
+                      }
+                    }
+                  },
+                  %{text: " • "},
+                  %{text: "3:45"}
+                ]
+              }
+             }
+           }
+        ]
+      }
+    }
   end
 
   defp playlist_source_fixture(attrs \\ []) do

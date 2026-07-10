@@ -9,7 +9,7 @@ defmodule PinchflatWeb.Api.V1.YoutubeController do
   def search(conn, %{"source_id" => source_id} = params) do
     with {:ok, source} <- Api.get_source(source_id),
          {:ok, items} <- Search.search(Map.get(params, "q"), max_results: Map.get(params, "max_results", 10)),
-         {:ok, statuses} <- Api.batch_media_status(source, Enum.map(items, & &1.youtube_id)) do
+         {:ok, statuses} <- statuses_for_items(source, items) do
       json(conn, %{items: merge_statuses(items, statuses, source.id)})
     else
       error -> render_error(conn, error)
@@ -43,24 +43,39 @@ defmodule PinchflatWeb.Api.V1.YoutubeController do
     statuses_by_id = Map.new(statuses, &{&1.youtube_id, &1})
 
     Enum.map(items, fn item ->
-      status = Map.fetch!(statuses_by_id, item.youtube_id)
-
-      Map.put(item, :pinchflat_status, %{
-        source_id: source_id,
-        status: status.status,
-        in_source: status.status != "unknown",
-        already_downloaded: status.status == "completed",
-        media_id: status.media_id,
-        media_uuid: status.media_uuid,
-        downloaded_at: status.downloaded_at,
-        filepath: status.filepath,
-        last_error: status.last_error
-      })
+      case statuses_by_id[Map.get(item, :youtube_id)] do
+        nil -> item
+        status -> Map.put(item, :pinchflat_status, pinchflat_status(status, source_id))
+      end
     end)
   end
 
-  defp render_error(conn, {:error, :youtube_api_key_not_configured}) do
-    error(conn, :conflict, "youtube_api_key_not_configured", "YouTube API key is not configured in Pinchflat settings")
+  defp statuses_for_items(source, items) do
+    youtube_ids =
+      items
+      |> Enum.map(&Map.get(&1, :youtube_id))
+      |> Enum.filter(&valid_youtube_id?/1)
+
+    case youtube_ids do
+      [] -> {:ok, []}
+      ids -> Api.batch_media_status(source, ids)
+    end
+  end
+
+  defp valid_youtube_id?(youtube_id), do: is_binary(youtube_id) and Regex.match?(~r/^[A-Za-z0-9_-]{11}$/, youtube_id)
+
+  defp pinchflat_status(status, source_id) do
+    %{
+      source_id: source_id,
+      status: status.status,
+      in_source: status.status != "unknown",
+      already_downloaded: status.status == "completed",
+      media_id: status.media_id,
+      media_uuid: status.media_uuid,
+      downloaded_at: status.downloaded_at,
+      filepath: status.filepath,
+      last_error: status.last_error
+    }
   end
 
   defp render_error(conn, {:error, :source_not_found}) do

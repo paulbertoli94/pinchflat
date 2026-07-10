@@ -20,6 +20,7 @@ defmodule PinchflatWeb.SettingControllerTest do
 
       assert response =~ "API Access"
       assert response =~ "data-api-connection-qr"
+      assert response =~ "tempus://pinchflat/connect#"
       assert response =~ "pinchflat_api_connection"
       assert response =~ "test-token"
       assert response =~ "http://www.example.com/api/v1"

@@ -52,12 +52,15 @@ defmodule PinchflatWeb.Settings.SettingController do
   defp api_connection_payload(conn) do
     case Application.get_env(:pinchflat, :api_token) do
       token when is_binary(token) and token != "" ->
-        Jason.encode!(%{
-          type: "pinchflat_api_connection",
-          version: 1,
-          api_base_url: api_base_url(conn),
-          token: token
-        })
+        payload =
+          Jason.encode!(%{
+            type: "pinchflat_api_connection",
+            version: 1,
+            api_base_url: api_base_url(conn),
+            token: token
+          })
+
+        "tempus://pinchflat/connect##{URI.encode(payload)}"
 
       _ ->
         nil

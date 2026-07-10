@@ -32,6 +32,28 @@ defmodule PinchflatWeb.Plugs do
   end
 
   @doc """
+  Authenticates API requests with `Authorization: Bearer <token>`.
+  """
+  def api_bearer_auth(conn, _opts) do
+    configured_token = Application.get_env(:pinchflat, :api_token)
+    provided_token = bearer_token(conn)
+
+    cond do
+      !credential_set?(configured_token) ->
+        send_json_error(conn, :service_unavailable, "api_token_not_configured", "API token is not configured")
+
+      !credential_set?(provided_token) ->
+        send_json_error(conn, :unauthorized, "unauthorized", "Unauthorized")
+
+      secure_token_compare(provided_token, configured_token) ->
+        conn
+
+      true ->
+        send_json_error(conn, :unauthorized, "unauthorized", "Unauthorized")
+    end
+  end
+
+  @doc """
   Removes the `x-frame-options` header from the response to allow the page to be embedded in an iframe.
   """
   def allow_iframe_embed(conn, _opts) do
@@ -58,9 +80,30 @@ defmodule PinchflatWeb.Plugs do
     credential && credential != ""
   end
 
+  defp bearer_token(conn) do
+    case get_req_header(conn, "authorization") do
+      ["Bearer " <> token | _] -> token
+      _ -> nil
+    end
+  end
+
+  defp secure_token_compare(left, right) do
+    left_hash = :crypto.hash(:sha256, left)
+    right_hash = :crypto.hash(:sha256, right)
+
+    Plug.Crypto.secure_compare(left_hash, right_hash)
+  end
+
   defp send_unauthorized(conn) do
     conn
     |> send_resp(:unauthorized, "Unauthorized")
+    |> halt()
+  end
+
+  defp send_json_error(conn, status, code, message) do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(status, Phoenix.json_library().encode!(%{error: %{code: code, message: message, details: %{}}}))
     |> halt()
   end
 end

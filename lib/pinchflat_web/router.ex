@@ -20,6 +20,11 @@ defmodule PinchflatWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :authenticated_api do
+    plug :accepts, ["json"]
+    plug :api_bearer_auth
+  end
+
   scope "/", PinchflatWeb do
     pipe_through [:maybe_basic_auth, :token_protected_route]
 
@@ -69,6 +74,14 @@ defmodule PinchflatWeb.Router do
     pipe_through :api
 
     get "/healthcheck", HealthController, :check, log: false
+  end
+
+  scope "/api/v1", PinchflatWeb.Api.V1 do
+    pipe_through :authenticated_api
+
+    post "/sources/:source_id/sync", SourceSyncController, :sync
+    get "/sources/:source_id/media/by-youtube-id/:youtube_id", SourceSyncController, :show_media_by_youtube_id
+    post "/sources/:source_id/media/status", SourceSyncController, :media_status
   end
 
   scope "/dev" do

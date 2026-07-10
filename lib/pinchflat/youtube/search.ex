@@ -31,6 +31,8 @@ defmodule Pinchflat.Youtube.Search do
       URI.encode_query(%{
         part: "snippet",
         type: "video",
+        videoCategoryId: "10",
+        videoDuration: "medium",
         maxResults: max_results,
         q: query,
         key: next_api_key()

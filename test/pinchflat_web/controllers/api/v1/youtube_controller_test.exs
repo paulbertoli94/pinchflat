@@ -153,6 +153,8 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
       assert url =~ "https://youtube.googleapis.com/youtube/v3/search?"
       assert url =~ "part=snippet"
       assert url =~ "type=video"
+      assert url =~ "videoCategoryId=10"
+      assert url =~ "videoDuration=medium"
       assert url =~ "maxResults=5"
       assert url =~ "q=daft+punk"
       assert url =~ "key=api-key"

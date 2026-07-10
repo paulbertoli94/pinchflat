@@ -140,6 +140,8 @@ GET /api/v1/youtube/search?q=daft%20punk&max_results=10&source_id=2
 
 This endpoint requires YouTube API Key(s) in Pinchflat settings. Tempus can use it to search YouTube without receiving the raw API key in the QR code.
 
+Search is tuned for music by default. Pinchflat asks YouTube for video results in the Music category and medium duration videos, which usually fits songs better than generic YouTube search.
+
 `source_id` is optional. When provided, Pinchflat enriches each search result with status for that Source.
 
 Response:

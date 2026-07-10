@@ -7,6 +7,7 @@ defmodule PinchflatWeb.Settings.SettingController do
   alias Pinchflat.Settings
   alias Pinchflat.Sources.Source
   alias Pinchflat.Youtube.OauthClient
+  alias Pinchflat.Youtube.Search
 
   def show(conn, _params) do
     setting = Settings.record()
@@ -112,7 +113,8 @@ defmodule PinchflatWeb.Settings.SettingController do
             capabilities: %{
               sync: true,
               media_status: true,
-              youtube_import: OauthClient.connected?(Settings.record())
+              youtube_import: OauthClient.connected?(Settings.record()),
+              youtube_search: Search.enabled?()
             },
             default_source_id: default_source_id(sources),
             sources: sources

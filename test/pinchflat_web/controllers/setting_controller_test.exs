@@ -26,13 +26,22 @@ defmodule PinchflatWeb.SettingControllerTest do
       payload = decoded_qr_payload(response)
 
       assert response =~ "API Access"
+      assert response =~ "Tempus setup"
+      assert response =~ "The QR does not include YouTube API keys"
       assert response =~ "data-api-connection-qr"
       assert response =~ "tempus://pinchflat/connect#"
       assert payload["type"] == "pinchflat_api_connection"
       assert payload["version"] == 3
       assert payload["token"] == "test-token"
       assert payload["api_base_url"] == "http://www.example.com/api/v1"
-      assert payload["capabilities"] == %{"media_status" => true, "sync" => true, "youtube_import" => false}
+
+      assert payload["capabilities"] == %{
+               "media_status" => true,
+               "sync" => true,
+               "youtube_import" => false,
+               "youtube_search" => false
+             }
+
       assert payload["default_source_id"] == source.id
 
       assert [

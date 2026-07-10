@@ -118,6 +118,33 @@ Response:
 
 This endpoint uses Google OAuth to call YouTube `playlistItems.insert` for the playlist configured on the Pinchflat Source. Videos already present in the playlist are treated as successfully imported. After the playlist write, Pinchflat enqueues the same forced source indexing used by `/sync`.
 
+### Search YouTube
+
+```http
+GET /api/v1/youtube/search?q=daft%20punk&max_results=10
+```
+
+This endpoint requires YouTube API Key(s) in Pinchflat settings. Tempus can use it to search YouTube without receiving the raw API key in the QR code.
+
+Response:
+
+```json
+{
+  "items": [
+    {
+      "youtube_id": "LdQU46djcAA",
+      "title": "Song title",
+      "channel_id": "UC123",
+      "channel_title": "Artist",
+      "published_at": "2024-01-01T00:00:00Z",
+      "thumbnail_url": "https://example.com/thumb.jpg"
+    }
+  ]
+}
+```
+
+`max_results` defaults to `10` and must be between `1` and `25`.
+
 ### Media Status By YouTube ID
 
 ```http

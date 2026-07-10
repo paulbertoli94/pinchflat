@@ -97,6 +97,25 @@
                 The QR code contains a tempus:// deep link with the API base URL and bearer token
                 configured with PINCHFLAT_API_TOKEN.
               </p>
+
+              <div class="mt-4 rounded-sm dark:bg-meta-4 p-4">
+                <h4 class="font-medium text-black dark:text-white">
+                  Tempus setup
+                </h4>
+
+                <ol class="mt-3 list-decimal space-y-2 pl-5 text-sm">
+                  <li>Configure YouTube API Key(s) above if Tempus should search YouTube through Pinchflat.</li>
+                  <li>Connect Google below if you want Tempus to import videos into YouTube playlists.</li>
+                  <li>Scan this QR code from Tempus.</li>
+                  <li>Select one of the enabled playlist Sources exposed by Pinchflat.</li>
+                  <li>Tempus will call Pinchflat import and then poll media status until the download completes.</li>
+                </ol>
+
+                <p class="mt-3 text-xs text-bodydark2">
+                  The QR does not include YouTube API keys, Google client secrets, Google refresh tokens,
+                  cookies, output paths, or yt-dlp options. Those stay in Pinchflat.
+                </p>
+              </div>
             </div>
           </div>
         <% else %>

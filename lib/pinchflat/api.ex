@@ -11,7 +11,7 @@ defmodule Pinchflat.Api do
   alias Pinchflat.Sources.Source
   alias Pinchflat.Media.MediaItem
   alias Pinchflat.SlowIndexing.SlowIndexingHelpers
-  alias Pinchflat.YouTube.OAuthClient
+  alias Pinchflat.Youtube.OauthClient
 
   @youtube_id_regex ~r/^[A-Za-z0-9_-]{11}$/
   @max_youtube_ids 500
@@ -49,7 +49,7 @@ defmodule Pinchflat.Api do
     with :ok <- validate_enabled_source(source),
          :ok <- validate_playlist_source(source),
          {:ok, normalized_ids} <- normalize_youtube_ids(youtube_ids),
-         {:ok, imported_ids} <- OAuthClient.insert_playlist_items(source, normalized_ids),
+         {:ok, imported_ids} <- OauthClient.insert_playlist_items(source, normalized_ids),
          {:ok, _synced_ids} <- sync_source(source, imported_ids) do
       {:ok, imported_ids}
     end

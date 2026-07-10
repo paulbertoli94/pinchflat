@@ -1,4 +1,4 @@
-defmodule Pinchflat.YouTube.OAuthClient do
+defmodule Pinchflat.Youtube.OauthClient do
   @moduledoc """
   Handles Google OAuth and YouTube playlist writes for server-side API imports.
   """
@@ -85,9 +85,8 @@ defmodule Pinchflat.YouTube.OAuthClient do
       })
 
     with {:ok, response} <- http_client().post(@token_url, body, form_headers(), []),
-         {:ok, payload} <- Jason.decode(response),
-         {:ok, access_token} <- fetch_access_token(payload) do
-      {:ok, access_token}
+         {:ok, payload} <- Jason.decode(response) do
+      fetch_access_token(payload)
     end
   end
 

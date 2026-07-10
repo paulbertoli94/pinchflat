@@ -6,7 +6,7 @@ defmodule PinchflatWeb.Settings.SettingController do
   alias Pinchflat.Repo
   alias Pinchflat.Settings
   alias Pinchflat.Sources.Source
-  alias Pinchflat.YouTube.OAuthClient
+  alias Pinchflat.Youtube.OauthClient
 
   def show(conn, _params) do
     setting = Settings.record()
@@ -32,13 +32,13 @@ defmodule PinchflatWeb.Settings.SettingController do
   def google_connect(conn, _params) do
     setting = Settings.record()
 
-    if OAuthClient.configured?(setting) do
+    if OauthClient.configured?(setting) do
       state = oauth_state()
       redirect_uri = google_redirect_uri(conn)
 
       conn
       |> put_session(:google_oauth_state, state)
-      |> redirect(external: OAuthClient.authorize_url(setting, redirect_uri, state))
+      |> redirect(external: OauthClient.authorize_url(setting, redirect_uri, state))
     else
       conn
       |> put_flash(:error, "Set Google OAuth Client ID and Client Secret first.")
@@ -50,7 +50,7 @@ defmodule PinchflatWeb.Settings.SettingController do
     setting = Settings.record()
 
     with ^state <- get_session(conn, :google_oauth_state),
-         {:ok, _setting} <- OAuthClient.exchange_code(setting, code, google_redirect_uri(conn)) do
+         {:ok, _setting} <- OauthClient.exchange_code(setting, code, google_redirect_uri(conn)) do
       conn
       |> delete_session(:google_oauth_state)
       |> put_flash(:info, "Google account connected successfully.")
@@ -92,8 +92,8 @@ defmodule PinchflatWeb.Settings.SettingController do
       api_connection_payload: api_connection_payload(conn),
       api_base_url: api_base_url(conn),
       google_redirect_uri: google_redirect_uri(conn),
-      google_oauth_configured?: OAuthClient.configured?(Settings.record()),
-      google_oauth_connected?: OAuthClient.connected?(Settings.record()),
+      google_oauth_configured?: OauthClient.configured?(Settings.record()),
+      google_oauth_connected?: OauthClient.connected?(Settings.record()),
       api_token_configured?: api_token_configured?()
     )
   end
@@ -112,7 +112,7 @@ defmodule PinchflatWeb.Settings.SettingController do
             capabilities: %{
               sync: true,
               media_status: true,
-              youtube_import: OAuthClient.connected?(Settings.record())
+              youtube_import: OauthClient.connected?(Settings.record())
             },
             default_source_id: default_source_id(sources),
             sources: sources

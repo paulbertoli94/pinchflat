@@ -9,6 +9,31 @@ defmodule PinchflatWeb.SettingControllerTest do
 
       assert html_response(conn, 200) =~ "Settings"
     end
+
+    test "renders Tempus API pairing when API token is configured", %{conn: conn} do
+      old_token = Application.get_env(:pinchflat, :api_token)
+      on_exit(fn -> Application.put_env(:pinchflat, :api_token, old_token) end)
+      Application.put_env(:pinchflat, :api_token, "test-token")
+
+      conn = get(conn, ~p"/settings")
+      response = html_response(conn, 200)
+
+      assert response =~ "API Access"
+      assert response =~ "data-api-connection-qr"
+      assert response =~ "pinchflat_api_connection"
+      assert response =~ "test-token"
+      assert response =~ "http://www.example.com/api/v1"
+    end
+
+    test "renders API token setup message when API token is not configured", %{conn: conn} do
+      old_token = Application.get_env(:pinchflat, :api_token)
+      on_exit(fn -> Application.put_env(:pinchflat, :api_token, old_token) end)
+      Application.put_env(:pinchflat, :api_token, nil)
+
+      conn = get(conn, ~p"/settings")
+
+      assert html_response(conn, 200) =~ "Set PINCHFLAT_API_TOKEN and restart Pinchflat to enable API pairing."
+    end
   end
 
   describe "update settings" do

@@ -22,6 +22,7 @@ import { Socket } from 'phoenix'
 import { LiveSocket } from 'phoenix_live_view'
 import topbar from '../vendor/topbar'
 import Alpine from 'alpinejs'
+import QRCode from 'qrcode'
 import './tabs'
 import './alpine_helpers'
 
@@ -55,6 +56,29 @@ let liveSocket = new LiveSocket(document.body.dataset.socketPath, Socket, {
 topbar.config({ barColors: { 0: '#29d' }, shadowColor: 'rgba(0, 0, 0, .3)' })
 window.addEventListener('phx:page-loading-start', (_info) => topbar.show(300))
 window.addEventListener('phx:page-loading-stop', (_info) => topbar.hide())
+
+function renderApiConnectionQRCodes() {
+  document.querySelectorAll('[data-api-connection-qr]').forEach((canvas) => {
+    const content = canvas.dataset.qrContent
+
+    if (!content || canvas.dataset.qrRendered === 'true') return
+
+    QRCode.toCanvas(canvas, content, {
+      errorCorrectionLevel: 'M',
+      margin: 1,
+      width: 192
+    })
+      .then(() => {
+        canvas.dataset.qrRendered = 'true'
+      })
+      .catch(() => {
+        canvas.dataset.qrRendered = 'false'
+      })
+  })
+}
+
+document.addEventListener('DOMContentLoaded', renderApiConnectionQRCodes)
+window.addEventListener('phx:page-loading-stop', renderApiConnectionQRCodes)
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()

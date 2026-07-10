@@ -7,6 +7,7 @@ defmodule Pinchflat.Youtube.Search do
   @max_query_length 120
   @endpoint "https://music.youtube.com/youtubei/v1/search?prettyPrint=false"
   @client_version "1.20240724.00.00"
+  @preferred_result_types ["song", "album", "artist", "playlist", "video"]
 
   def enabled?, do: true
 
@@ -15,7 +16,7 @@ defmodule Pinchflat.Youtube.Search do
          {:ok, max_results} <- normalize_max_results(Keyword.get(opts, :max_results, @max_results)),
          {:ok, response} <- request(query, max_results),
          {:ok, payload} <- Jason.decode(response) do
-      {:ok, payload |> parse_items() |> Enum.take(max_results)}
+      {:ok, payload |> parse_items() |> diversify_items() |> Enum.take(max_results)}
     end
   end
 
@@ -41,6 +42,18 @@ defmodule Pinchflat.Youtube.Search do
     |> search_sections()
     |> Enum.flat_map(&parse_section/1)
     |> Enum.reject(&is_nil/1)
+    |> Enum.uniq_by(&item_key/1)
+  end
+
+  defp diversify_items(items) do
+    featured_items =
+      Enum.flat_map(@preferred_result_types, fn type ->
+        items
+        |> Enum.find(&(Map.get(&1, :type) == type))
+        |> List.wrap()
+      end)
+
+    (featured_items ++ items)
     |> Enum.uniq_by(&item_key/1)
   end
 

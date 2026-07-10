@@ -86,6 +86,44 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
       refute response(conn, 200) =~ "api-key"
     end
 
+    test "keeps search results mixed across songs, albums, and artists", %{conn: conn} do
+      source = playlist_source_fixture()
+
+      expect_search_request([
+        %{
+          musicShelfRenderer: %{
+            title: %{runs: [%{text: "Songs"}]},
+            contents: [
+              youtube_music_song("AAAAAAAAAAA", "Song 1"),
+              youtube_music_song("BBBBBBBBBBB", "Song 2"),
+              youtube_music_song("CCCCCCCCCCC", "Song 3"),
+              youtube_music_song("DDDDDDDDDDD", "Song 4")
+            ]
+          }
+        },
+        %{
+          musicShelfRenderer: %{
+            title: %{runs: [%{text: "Albums"}]},
+            contents: [search_album()]
+          }
+        },
+        %{
+          musicShelfRenderer: %{
+            title: %{runs: [%{text: "Artists"}]},
+            contents: [search_artist()]
+          }
+        }
+      ])
+
+      conn =
+        conn
+        |> api_auth()
+        |> get("/api/v1/sources/#{source.id}/youtube/search", %{q: "daft punk", max_results: 4})
+
+      assert %{"items" => items} = json_response(conn, 200)
+      assert Enum.map(items, & &1["type"]) == ["song", "album", "artist", "song"]
+    end
+
     test "includes unknown Pinchflat status when source_id is provided and media is not known", %{conn: conn} do
       Settings.set(youtube_api_key: "api-key")
       source = playlist_source_fixture()
@@ -288,7 +326,7 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
     put_req_header(conn, "authorization", "Bearer #{@token}")
   end
 
-  defp expect_search_request do
+  defp expect_search_request(contents \\ nil) do
     expect(HTTPClientMock, :post, fn url, body, headers, _opts ->
       assert url == "https://music.youtube.com/youtubei/v1/search?prettyPrint=false"
       assert %{query: query, context: %{client: %{clientName: "WEB_REMIX"}}} = Jason.decode!(body, keys: :atoms)
@@ -307,16 +345,7 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
                    selected: true,
                    content: %{
                      sectionListRenderer: %{
-                       contents: [
-                         %{
-                           musicShelfRenderer: %{
-                             title: %{runs: [%{text: "Songs"}]},
-                             contents: [
-                               youtube_music_song()
-                             ]
-                           }
-                         }
-                       ]
+                       contents: contents || default_search_contents()
                      }
                    }
                  }
@@ -340,7 +369,20 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
     end)
   end
 
-  defp youtube_music_song do
+  defp default_search_contents do
+    [
+      %{
+        musicShelfRenderer: %{
+          title: %{runs: [%{text: "Songs"}]},
+          contents: [
+            youtube_music_song()
+          ]
+        }
+      }
+    ]
+  end
+
+  defp youtube_music_song(youtube_id \\ @youtube_id, title \\ "Song title") do
     %{
       musicResponsiveListItemRenderer: %{
         thumbnail: %{
@@ -353,15 +395,15 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
             }
           }
         },
-        playlistItemData: %{videoId: @youtube_id},
+        playlistItemData: %{videoId: youtube_id},
         flexColumns: [
           %{
             musicResponsiveListItemFlexColumnRenderer: %{
               text: %{
                 runs: [
                   %{
-                    text: "Song title",
-                    navigationEndpoint: %{watchEndpoint: %{videoId: @youtube_id}}
+                    text: title,
+                    navigationEndpoint: %{watchEndpoint: %{videoId: youtube_id}}
                   }
                 ]
               }
@@ -396,6 +438,62 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
                   },
                   %{text: " • "},
                   %{text: "3:45"}
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  end
+
+  defp search_album do
+    %{
+      musicResponsiveListItemRenderer: %{
+        flexColumns: [
+          %{
+            musicResponsiveListItemFlexColumnRenderer: %{
+              text: %{
+                runs: [
+                  %{
+                    text: "Album result",
+                    navigationEndpoint: %{
+                      browseEndpoint: %{
+                        browseId: "MPRESEARCHALBUM",
+                        browseEndpointContextSupportedConfigs: %{
+                          browseEndpointContextMusicConfig: %{pageType: "MUSIC_PAGE_TYPE_ALBUM"}
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  end
+
+  defp search_artist do
+    %{
+      musicResponsiveListItemRenderer: %{
+        flexColumns: [
+          %{
+            musicResponsiveListItemFlexColumnRenderer: %{
+              text: %{
+                runs: [
+                  %{
+                    text: "Artist result",
+                    navigationEndpoint: %{
+                      browseEndpoint: %{
+                        browseId: "UCRESEARCHARTIST",
+                        browseEndpointContextSupportedConfigs: %{
+                          browseEndpointContextMusicConfig: %{pageType: "MUSIC_PAGE_TYPE_ARTIST"}
+                        }
+                      }
+                    }
+                  }
                 ]
               }
             }

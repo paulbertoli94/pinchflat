@@ -142,6 +142,10 @@ This endpoint searches YouTube Music through Pinchflat. It does not require YouT
 
 Search is tuned for music by default. Pinchflat uses YouTube Music's internal web API and normalizes songs, videos, albums, artists, and playlists into a stable JSON shape for API clients. This is not an official Google API, so Pinchflat keeps the integration server-side.
 
+Results are diversified before `max_results` is applied. When YouTube Music returns multiple categories for the same
+query, Pinchflat keeps the first available song, album, artist, playlist, and video near the top instead of letting one
+category consume the whole response.
+
 Response:
 
 ```json

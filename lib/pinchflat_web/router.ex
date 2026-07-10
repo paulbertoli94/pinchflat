@@ -53,6 +53,8 @@ defmodule PinchflatWeb.Router do
     resources "/search", Searches.SearchController, only: [:show], singleton: true
 
     resources "/settings", Settings.SettingController, only: [:show, :update], singleton: true
+    get "/settings/google/connect", Settings.SettingController, :google_connect
+    get "/settings/google/callback", Settings.SettingController, :google_callback
     get "/app_info", Settings.SettingController, :app_info
     get "/download_logs", Settings.SettingController, :download_logs
 
@@ -80,6 +82,7 @@ defmodule PinchflatWeb.Router do
     pipe_through :authenticated_api
 
     post "/sources/:source_id/sync", SourceSyncController, :sync
+    post "/sources/:source_id/import", SourceSyncController, :import
     get "/sources/:source_id/media/by-youtube-id/:youtube_id", SourceSyncController, :show_media_by_youtube_id
     post "/sources/:source_id/media/status", SourceSyncController, :media_status
   end

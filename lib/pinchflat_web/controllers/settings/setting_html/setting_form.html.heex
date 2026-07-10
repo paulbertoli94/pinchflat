@@ -109,6 +109,98 @@
 
     <section class="mt-8">
       <h3 class="text-2xl text-black dark:text-white">
+        Google YouTube Connection
+      </h3>
+
+      <p class="mt-2 max-w-prose text-sm">
+        Connect the Google account that owns the playlists exposed to Tempus. Pinchflat uses this only
+        to add videos to those YouTube playlists before running the normal source sync.
+      </p>
+
+      <div class="mt-4 rounded-sm dark:bg-meta-4 p-4 md:p-6">
+        <h4 class="font-medium text-black dark:text-white">
+          Google setup
+        </h4>
+
+        <ol class="mt-3 list-decimal space-y-2 pl-5 text-sm">
+          <li>Create or select a Google Cloud project.</li>
+          <li>Enable YouTube Data API v3.</li>
+          <li>Configure the OAuth consent screen and add your Google account as a test user.</li>
+          <li>Create an OAuth Client ID using Web application as the application type.</li>
+          <li>Add the redirect URI below to Authorized redirect URIs.</li>
+          <li>Paste the Client ID and Client Secret here, save settings, then connect Google.</li>
+        </ol>
+
+        <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+          <.link
+            href="https://console.cloud.google.com/apis/library/youtube.googleapis.com"
+            target="_blank"
+            class="inline-flex justify-center rounded-lg border border-stroke px-4 py-2 text-sm font-medium hover:bg-whiten dark:border-strokedark dark:hover:bg-meta-4"
+          >
+            Open YouTube API
+          </.link>
+
+          <.link
+            href="https://console.cloud.google.com/apis/credentials"
+            target="_blank"
+            class="inline-flex justify-center rounded-lg border border-stroke px-4 py-2 text-sm font-medium hover:bg-whiten dark:border-strokedark dark:hover:bg-meta-4"
+          >
+            Open OAuth Credentials
+          </.link>
+
+          <.link
+            href="https://console.cloud.google.com/apis/credentials/consent"
+            target="_blank"
+            class="inline-flex justify-center rounded-lg border border-stroke px-4 py-2 text-sm font-medium hover:bg-whiten dark:border-strokedark dark:hover:bg-meta-4"
+          >
+            Open Consent Screen
+          </.link>
+        </div>
+      </div>
+
+      <.input
+        field={f[:google_oauth_client_id]}
+        type="text"
+        label="Google OAuth Client ID"
+        inputclass="font-mono text-sm mr-4"
+      />
+
+      <.input
+        field={f[:google_oauth_client_secret]}
+        type="password"
+        label="Google OAuth Client Secret"
+        inputclass="font-mono text-sm mr-4"
+      />
+
+      <p class="mt-3 text-sm">
+        OAuth Redirect URI
+      </p>
+
+      <code class="mt-1 block break-all rounded bg-whiten px-3 py-2 text-xs font-mono text-black dark:bg-boxdark dark:text-white">
+        {@google_redirect_uri}
+      </code>
+
+      <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <.link
+          :if={@google_oauth_configured?}
+          href={~p"/settings/google/connect"}
+          class="inline-flex justify-center rounded-lg bg-primary px-5 py-3 font-medium text-gray hover:bg-opacity-90"
+        >
+          Connect Google
+        </.link>
+
+        <span :if={@google_oauth_connected?} class="text-sm text-success">
+          Connected
+        </span>
+
+        <span :if={!@google_oauth_configured?} class="text-sm">
+          Save Client ID and Client Secret to enable Google connection.
+        </span>
+      </div>
+    </section>
+
+    <section class="mt-8">
+      <h3 class="text-2xl text-black dark:text-white">
         Codec Options
       </h3>
 

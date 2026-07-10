@@ -5,6 +5,26 @@ defmodule PinchflatWeb.Api.V1.SourceSyncController do
 
   alias Pinchflat.Api
 
+  def import(conn, %{"source_id" => source_id} = params) do
+    youtube_ids = Map.get(params, "youtube_ids")
+
+    with {:ok, source} <- Api.get_source(source_id),
+         {:ok, imported_ids} <- Api.import_to_source(source, youtube_ids) do
+      Logger.info("API import queued source_id=#{source.id} youtube_id_count=#{length(imported_ids)}")
+
+      conn
+      |> put_status(:accepted)
+      |> json(%{
+        source_id: source.id,
+        status: "queued",
+        imported_youtube_ids: imported_ids,
+        expected_youtube_ids: imported_ids
+      })
+    else
+      error -> render_error(conn, error)
+    end
+  end
+
   def sync(conn, %{"source_id" => source_id} = params) do
     youtube_ids = Map.get(params, "youtube_ids")
 
@@ -78,6 +98,23 @@ defmodule PinchflatWeb.Api.V1.SourceSyncController do
   defp render_error(conn, {:error, {:enqueue_failed, reason}}) do
     Logger.error("API sync enqueue failed: #{inspect(reason)}")
     error(conn, :internal_server_error, "enqueue_failed", "Failed to enqueue indexing task")
+  end
+
+  defp render_error(conn, {:error, :google_not_connected}) do
+    error(conn, :conflict, "google_not_connected", "Google account is not connected in Pinchflat settings")
+  end
+
+  defp render_error(conn, {:error, :google_refresh_token_missing}) do
+    error(conn, :bad_gateway, "google_refresh_token_missing", "Google did not return a refresh token")
+  end
+
+  defp render_error(conn, {:error, :google_access_token_missing}) do
+    error(conn, :bad_gateway, "google_access_token_missing", "Google did not return an access token")
+  end
+
+  defp render_error(conn, {:error, {:youtube_api_error, reason}}) do
+    Logger.error("YouTube API import failed: #{inspect(reason)}")
+    error(conn, :bad_gateway, "youtube_api_error", "YouTube API request failed")
   end
 
   defp render_error(conn, error) do

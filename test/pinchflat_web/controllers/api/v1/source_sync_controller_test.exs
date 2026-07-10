@@ -6,6 +6,7 @@ defmodule PinchflatWeb.Api.V1.SourceSyncControllerTest do
   import Pinchflat.SourcesFixtures
 
   alias Pinchflat.Repo
+  alias Pinchflat.Settings
   alias Pinchflat.Downloading.MediaDownloadWorker
   alias Pinchflat.SlowIndexing.MediaCollectionIndexingWorker
 
@@ -156,6 +157,94 @@ defmodule PinchflatWeb.Api.V1.SourceSyncControllerTest do
       post(authed_conn, "/api/v1/sources/#{source.id}/sync", %{youtube_ids: [@youtube_id]})
 
       assert [_job] = all_enqueued(worker: MediaCollectionIndexingWorker)
+    end
+  end
+
+  describe "POST /api/v1/sources/:id/import" do
+    test "returns 409 when Google is not connected", %{conn: conn} do
+      source = playlist_source_fixture()
+
+      conn =
+        conn
+        |> api_auth()
+        |> post("/api/v1/sources/#{source.id}/import", %{youtube_ids: [@youtube_id]})
+
+      assert %{"error" => %{"code" => "google_not_connected"}} = json_response(conn, 409)
+    end
+
+    test "adds videos to the YouTube playlist and queues source indexing", %{conn: conn} do
+      source = playlist_source_fixture(collection_id: "PL123")
+
+      {:ok, _setting} =
+        Settings.update_setting(Settings.record(), %{
+          google_oauth_client_id: "client-id",
+          google_oauth_client_secret: "client-secret",
+          google_oauth_refresh_token: "refresh-token",
+          google_oauth_connected_at: now()
+        })
+
+      expect(HTTPClientMock, :post, fn url, body, headers, _opts ->
+        assert url == "https://oauth2.googleapis.com/token"
+        assert body =~ "refresh_token=refresh-token"
+        assert {"content-type", "application/x-www-form-urlencoded"} in headers
+
+        {:ok, Jason.encode!(%{access_token: "access-token"})}
+      end)
+
+      expect(HTTPClientMock, :post, fn url, body, headers, _opts ->
+        assert url == "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet"
+        assert {"authorization", "Bearer access-token"} in headers
+
+        assert %{
+                 "snippet" => %{
+                   "playlistId" => "PL123",
+                   "resourceId" => %{"kind" => "youtube#video", "videoId" => @youtube_id}
+                 }
+               } = Jason.decode!(body)
+
+        {:ok, "{}"}
+      end)
+
+      conn =
+        conn
+        |> api_auth()
+        |> post("/api/v1/sources/#{source.id}/import", %{youtube_ids: [@youtube_id]})
+
+      assert %{
+               "status" => "queued",
+               "imported_youtube_ids" => [@youtube_id],
+               "expected_youtube_ids" => [@youtube_id]
+             } = json_response(conn, 202)
+
+      assert [job] = all_enqueued(worker: MediaCollectionIndexingWorker)
+      assert job.args == %{"id" => source.id, "force" => true}
+    end
+
+    test "treats videos already in the YouTube playlist as imported", %{conn: conn} do
+      source = playlist_source_fixture(collection_id: "PL123")
+
+      {:ok, _setting} =
+        Settings.update_setting(Settings.record(), %{
+          google_oauth_client_id: "client-id",
+          google_oauth_client_secret: "client-secret",
+          google_oauth_refresh_token: "refresh-token",
+          google_oauth_connected_at: now()
+        })
+
+      expect(HTTPClientMock, :post, fn _url, _body, _headers, _opts ->
+        {:ok, Jason.encode!(%{access_token: "access-token"})}
+      end)
+
+      expect(HTTPClientMock, :post, fn _url, _body, _headers, _opts ->
+        {:error, "videoAlreadyInPlaylist"}
+      end)
+
+      conn =
+        conn
+        |> api_auth()
+        |> post("/api/v1/sources/#{source.id}/import", %{youtube_ids: [@youtube_id]})
+
+      assert %{"status" => "queued", "imported_youtube_ids" => [@youtube_id]} = json_response(conn, 202)
     end
   end
 

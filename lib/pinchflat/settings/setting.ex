@@ -15,6 +15,10 @@ defmodule Pinchflat.Settings.Setting do
     :video_codec_preference,
     :audio_codec_preference,
     :youtube_api_key,
+    :google_oauth_client_id,
+    :google_oauth_client_secret,
+    :google_oauth_refresh_token,
+    :google_oauth_connected_at,
     :extractor_sleep_interval_seconds,
     :download_throughput_limit,
     :restrict_filenames
@@ -35,6 +39,10 @@ defmodule Pinchflat.Settings.Setting do
     field :apprise_version, :string
     field :apprise_server, :string
     field :youtube_api_key, :string
+    field :google_oauth_client_id, :string
+    field :google_oauth_client_secret, :string
+    field :google_oauth_refresh_token, :string
+    field :google_oauth_connected_at, :utc_datetime
     field :route_token, :string
     field :extractor_sleep_interval_seconds, :integer, default: 0
     # This is a string because it accepts values like "100K" or "4.2M"

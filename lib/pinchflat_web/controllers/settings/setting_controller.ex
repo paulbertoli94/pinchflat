@@ -6,6 +6,7 @@ defmodule PinchflatWeb.Settings.SettingController do
   alias Pinchflat.Repo
   alias Pinchflat.Settings
   alias Pinchflat.Sources.Source
+  alias Pinchflat.YouTube.OAuthClient
 
   def show(conn, _params) do
     setting = Settings.record()
@@ -26,6 +27,47 @@ defmodule PinchflatWeb.Settings.SettingController do
       {:error, %Ecto.Changeset{} = changeset} ->
         render_settings(conn, changeset)
     end
+  end
+
+  def google_connect(conn, _params) do
+    setting = Settings.record()
+
+    if OAuthClient.configured?(setting) do
+      state = oauth_state()
+      redirect_uri = google_redirect_uri(conn)
+
+      conn
+      |> put_session(:google_oauth_state, state)
+      |> redirect(external: OAuthClient.authorize_url(setting, redirect_uri, state))
+    else
+      conn
+      |> put_flash(:error, "Set Google OAuth Client ID and Client Secret first.")
+      |> redirect(to: ~p"/settings")
+    end
+  end
+
+  def google_callback(conn, %{"code" => code, "state" => state}) do
+    setting = Settings.record()
+
+    with ^state <- get_session(conn, :google_oauth_state),
+         {:ok, _setting} <- OAuthClient.exchange_code(setting, code, google_redirect_uri(conn)) do
+      conn
+      |> delete_session(:google_oauth_state)
+      |> put_flash(:info, "Google account connected successfully.")
+      |> redirect(to: ~p"/settings")
+    else
+      _error ->
+        conn
+        |> delete_session(:google_oauth_state)
+        |> put_flash(:error, "Google account connection failed.")
+        |> redirect(to: ~p"/settings")
+    end
+  end
+
+  def google_callback(conn, _params) do
+    conn
+    |> put_flash(:error, "Google account connection failed.")
+    |> redirect(to: ~p"/settings")
   end
 
   def app_info(conn, _params) do
@@ -49,6 +91,9 @@ defmodule PinchflatWeb.Settings.SettingController do
       changeset: changeset,
       api_connection_payload: api_connection_payload(conn),
       api_base_url: api_base_url(conn),
+      google_redirect_uri: google_redirect_uri(conn),
+      google_oauth_configured?: OAuthClient.configured?(Settings.record()),
+      google_oauth_connected?: OAuthClient.connected?(Settings.record()),
       api_token_configured?: api_token_configured?()
     )
   end
@@ -61,9 +106,14 @@ defmodule PinchflatWeb.Settings.SettingController do
         payload =
           Jason.encode!(%{
             type: "pinchflat_api_connection",
-            version: 2,
+            version: 3,
             api_base_url: api_base_url(conn),
             token: token,
+            capabilities: %{
+              sync: true,
+              media_status: true,
+              youtube_import: OAuthClient.connected?(Settings.record())
+            },
             default_source_id: default_source_id(sources),
             sources: sources
           })
@@ -114,5 +164,15 @@ defmodule PinchflatWeb.Settings.SettingController do
       token when is_binary(token) and token != "" -> true
       _ -> false
     end
+  end
+
+  defp google_redirect_uri(conn) do
+    url(conn, ~p"/settings/google/callback")
+  end
+
+  defp oauth_state do
+    32
+    |> :crypto.strong_rand_bytes()
+    |> Base.url_encode64(padding: false)
   end
 end

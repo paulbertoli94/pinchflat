@@ -10,6 +10,9 @@ defmodule PinchflatWeb.Settings.SettingHTML do
   attr :changeset, Ecto.Changeset, required: true
   attr :action, :string, required: true
   attr :api_base_url, :string, required: true
+  attr :google_redirect_uri, :string, required: true
+  attr :google_oauth_configured?, :boolean, required: true
+  attr :google_oauth_connected?, :boolean, required: true
   attr :api_connection_payload, :string, default: nil
   attr :api_token_configured?, :boolean, required: true
 

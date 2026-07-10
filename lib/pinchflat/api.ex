@@ -11,6 +11,7 @@ defmodule Pinchflat.Api do
   alias Pinchflat.Sources.Source
   alias Pinchflat.Media.MediaItem
   alias Pinchflat.SlowIndexing.SlowIndexingHelpers
+  alias Pinchflat.YouTube.OAuthClient
 
   @youtube_id_regex ~r/^[A-Za-z0-9_-]{11}$/
   @max_youtube_ids 500
@@ -41,6 +42,16 @@ defmodule Pinchflat.Api do
         {:error, :duplicate_job} -> {:ok, normalized_ids}
         {:error, error} -> {:error, {:enqueue_failed, error}}
       end
+    end
+  end
+
+  def import_to_source(%Source{} = source, youtube_ids) do
+    with :ok <- validate_enabled_source(source),
+         :ok <- validate_playlist_source(source),
+         {:ok, normalized_ids} <- normalize_youtube_ids(youtube_ids),
+         {:ok, imported_ids} <- OAuthClient.insert_playlist_items(source, normalized_ids),
+         {:ok, _synced_ids} <- sync_source(source, imported_ids) do
+      {:ok, imported_ids}
     end
   end
 

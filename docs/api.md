@@ -2,7 +2,9 @@
 
 Pinchflat exposes a small authenticated API for external clients that add videos to a YouTube playlist already configured as a Pinchflat Source.
 
-The playlist remains the source of truth. The API does not add videos to YouTube playlists and does not download arbitrary YouTube IDs. A client should first update the YouTube playlist, then call `/sync`, then poll media status.
+The playlist remains the source of truth. `/sync` does not add videos to YouTube playlists and does not download arbitrary YouTube IDs. A client should first update the YouTube playlist, then call `/sync`, then poll media status.
+
+If Google is connected in Pinchflat settings, clients can instead call `/import`. Pinchflat will add the videos to the YouTube playlist for that Source, then run the same source sync pipeline.
 
 ## Configuration
 
@@ -23,6 +25,17 @@ Authorization: Bearer <token>
 ```
 
 If `PINCHFLAT_API_TOKEN` is not set, API endpoints return `503`.
+
+## Google YouTube Connection
+
+`/import` requires a Google OAuth connection in Pinchflat:
+
+1. Create an OAuth client in Google Cloud for a web application.
+2. Add Pinchflat's redirect URI shown in Settings -> Advanced -> Google YouTube Connection.
+3. Save the Google OAuth Client ID and Client Secret in Pinchflat settings.
+4. Click Connect Google and authorize the YouTube account that owns the playlists.
+
+Pinchflat stores the Google refresh token server-side. The refresh token is never included in the Tempus QR payload or REST API responses.
 
 ## Endpoints
 
@@ -66,6 +79,45 @@ Response:
 
 This enqueues Pinchflat's existing source indexing worker with `force: true`. New media creation and downloads are handled by the existing indexing and download pipeline, including media profile settings, cookies, yt-dlp options, naming, metadata, thumbnails, retry behavior, and post-processing.
 
+### Import To Source Playlist
+
+```http
+POST /api/v1/sources/:source_id/import
+```
+
+Body:
+
+```json
+{
+  "youtube_ids": ["LdQU46djcAA"]
+}
+```
+
+Example:
+
+```bash
+curl -X POST \
+  http://localhost:8945/api/v1/sources/2/import \
+  -H "Authorization: Bearer $PINCHFLAT_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "youtube_ids": ["LdQU46djcAA"]
+  }'
+```
+
+Response:
+
+```json
+{
+  "source_id": 2,
+  "status": "queued",
+  "imported_youtube_ids": ["LdQU46djcAA"],
+  "expected_youtube_ids": ["LdQU46djcAA"]
+}
+```
+
+This endpoint uses Google OAuth to call YouTube `playlistItems.insert` for the playlist configured on the Pinchflat Source. Videos already present in the playlist are treated as successfully imported. After the playlist write, Pinchflat enqueues the same forced source indexing used by `/sync`.
+
 ### Media Status By YouTube ID
 
 ```http
@@ -103,7 +155,7 @@ Response:
 
 `youtube_ids` accepts only YouTube video IDs: 11 characters using letters, digits, `_`, or `-`. Full URLs and empty strings are rejected. A batch may contain at most 500 IDs. Duplicate IDs are removed before processing.
 
-`/sync` is idempotent for the same source and IDs. It uses Pinchflat's existing Oban job uniqueness and source indexing helper. Existing downloaded media is not downloaded again, pending or queued media is not duplicated, and failed media is not retried unless the normal Pinchflat indexing flow would do so.
+`/sync` is idempotent for the same source and IDs. `/import` is also idempotent for videos that are already in the YouTube playlist. Both endpoints use Pinchflat's existing Oban job uniqueness and source indexing helper. Existing downloaded media is not downloaded again, pending or queued media is not duplicated, and failed media is not retried unless the normal Pinchflat indexing flow would do so.
 
 ## Status Values
 

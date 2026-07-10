@@ -35,6 +35,23 @@ defmodule Pinchflat.HTTP.HTTPClient do
     end
   end
 
+  @impl HTTPBehaviour
+  def post(url, body, headers \\ [], opts \\ []) do
+    headers = parse_headers(headers)
+    content_type = headers |> List.keyfind(~c"content-type", 0, {~c"content-type", ~c"application/json"}) |> elem(1)
+
+    case :httpc.request(:post, {url, headers, content_type, body}, [], opts) do
+      {:ok, {{_version, status_code, _reason_phrase}, _headers, body}} when status_code in 200..299 ->
+        {:ok, to_string(body)}
+
+      {:ok, {{_version, status_code, reason_phrase}, _headers, body}} ->
+        {:error, "HTTP request failed with status code #{status_code}: #{reason_phrase}: #{to_string(body)}"}
+
+      {:error, reason} ->
+        {:error, "HTTP request failed: #{reason}"}
+    end
+  end
+
   defp parse_headers(headers) do
     Enum.map(headers, fn {k, v} -> {to_charlist(k), to_charlist(v)} end)
   end

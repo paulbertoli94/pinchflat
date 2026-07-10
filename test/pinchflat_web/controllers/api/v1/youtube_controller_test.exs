@@ -398,8 +398,8 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
                   %{text: "3:45"}
                 ]
               }
-             }
-           }
+            }
+          }
         ]
       }
     }
@@ -457,7 +457,9 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
                 content: %{
                   sectionListRenderer: %{
                     contents: [
-                      %{musicShelfRenderer: %{title: %{runs: [%{text: "Top songs"}]}, contents: [youtube_music_song()]}},
+                      %{
+                        musicShelfRenderer: %{title: %{runs: [%{text: "Top songs"}]}, contents: [youtube_music_song()]}
+                      },
                       %{musicShelfRenderer: %{title: %{runs: [%{text: "Albums"}]}, contents: [artist_album()]}}
                     ]
                   }

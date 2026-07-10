@@ -87,6 +87,24 @@ defmodule Pinchflat.Api do
     end
   end
 
+  def recent_media_for_source(%Source{} = source, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 25)
+
+    items =
+      MediaItem
+      |> where([mi], mi.source_id == ^source.id)
+      |> order_by([mi],
+        desc: fragment("? IS NOT NULL", mi.media_downloaded_at),
+        desc: mi.media_downloaded_at,
+        desc: mi.inserted_at
+      )
+      |> limit(^limit)
+      |> Repo.all()
+      |> Enum.map(&media_status/1)
+
+    {:ok, items}
+  end
+
   def normalize_youtube_ids(ids) when is_list(ids) do
     ids = Enum.map(ids, &String.trim(to_string(&1)))
 

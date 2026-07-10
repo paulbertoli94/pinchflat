@@ -6,26 +6,38 @@ defmodule PinchflatWeb.Api.V1.YoutubeController do
   alias Pinchflat.Api
   alias Pinchflat.Youtube.Search
 
-  def search(conn, params) do
-    case Search.search(Map.get(params, "q"), max_results: Map.get(params, "max_results", 10)) do
-      {:ok, items} -> render_search_results(conn, items, Map.get(params, "source_id"))
-      error -> render_error(conn, error)
-    end
-  end
-
-  defp render_search_results(conn, items, nil), do: json(conn, %{items: items})
-  defp render_search_results(conn, items, ""), do: json(conn, %{items: items})
-
-  defp render_search_results(conn, items, source_id) do
-    youtube_ids = Enum.map(items, & &1.youtube_id)
-
+  def search(conn, %{"source_id" => source_id} = params) do
     with {:ok, source} <- Api.get_source(source_id),
-         {:ok, statuses} <- Api.batch_media_status(source, youtube_ids) do
+         {:ok, items} <- Search.search(Map.get(params, "q"), max_results: Map.get(params, "max_results", 10)),
+         {:ok, statuses} <- Api.batch_media_status(source, Enum.map(items, & &1.youtube_id)) do
       json(conn, %{items: merge_statuses(items, statuses, source.id)})
     else
       error -> render_error(conn, error)
     end
   end
+
+  def history(conn, %{"source_id" => source_id} = params) do
+    with {:ok, source} <- Api.get_source(source_id),
+         {:ok, limit} <- normalize_limit(Map.get(params, "limit", 25)),
+         {:ok, items} <- Api.recent_media_for_source(source, limit: limit) do
+      json(conn, %{items: items})
+    else
+      error -> render_error(conn, error)
+    end
+  end
+
+  defp normalize_limit(limit) when is_binary(limit) do
+    case Integer.parse(limit) do
+      {value, ""} -> normalize_limit(value)
+      _ -> {:error, :invalid_limit}
+    end
+  end
+
+  defp normalize_limit(limit) when is_integer(limit) and limit in 1..100 do
+    {:ok, limit}
+  end
+
+  defp normalize_limit(_limit), do: {:error, :invalid_limit}
 
   defp merge_statuses(items, statuses, source_id) do
     statuses_by_id = Map.new(statuses, &{&1.youtube_id, &1})
@@ -65,6 +77,10 @@ defmodule PinchflatWeb.Api.V1.YoutubeController do
 
   defp render_error(conn, {:error, :invalid_max_results}) do
     error(conn, :unprocessable_entity, "invalid_max_results", "max_results must be between 1 and 25")
+  end
+
+  defp render_error(conn, {:error, :invalid_limit}) do
+    error(conn, :unprocessable_entity, "invalid_limit", "limit must be between 1 and 100")
   end
 
   defp render_error(conn, {:error, reason}) do

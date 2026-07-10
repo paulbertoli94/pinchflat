@@ -20,42 +20,46 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
 
   describe "GET /api/v1/youtube/search" do
     test "requires bearer auth", %{conn: conn} do
-      conn = get(conn, "/api/v1/youtube/search", %{q: "test"})
+      source = playlist_source_fixture()
+      conn = get(conn, "/api/v1/sources/#{source.id}/youtube/search", %{q: "test"})
 
       assert %{"error" => %{"code" => "unauthorized"}} = json_response(conn, 401)
     end
 
     test "returns 409 when YouTube API key is not configured", %{conn: conn} do
       Settings.set(youtube_api_key: nil)
+      source = playlist_source_fixture()
 
       conn =
         conn
         |> api_auth()
-        |> get("/api/v1/youtube/search", %{q: "test"})
+        |> get("/api/v1/sources/#{source.id}/youtube/search", %{q: "test"})
 
       assert %{"error" => %{"code" => "youtube_api_key_not_configured"}} = json_response(conn, 409)
     end
 
     test "returns 422 when query is empty", %{conn: conn} do
       Settings.set(youtube_api_key: "api-key")
+      source = playlist_source_fixture()
 
       conn =
         conn
         |> api_auth()
-        |> get("/api/v1/youtube/search", %{q: " "})
+        |> get("/api/v1/sources/#{source.id}/youtube/search", %{q: " "})
 
       assert %{"error" => %{"code" => "empty_query"}} = json_response(conn, 422)
     end
 
     test "searches YouTube through Pinchflat without exposing the API key", %{conn: conn} do
       Settings.set(youtube_api_key: "api-key")
+      source = playlist_source_fixture()
 
       expect_search_request()
 
       conn =
         conn
         |> api_auth()
-        |> get("/api/v1/youtube/search", %{q: "daft punk", max_results: 5})
+        |> get("/api/v1/sources/#{source.id}/youtube/search", %{q: "daft punk", max_results: 5})
 
       assert %{
                "items" => [
@@ -65,7 +69,8 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
                    "channel_id" => "UC123",
                    "channel_title" => "Artist",
                    "published_at" => "2024-01-01T00:00:00Z",
-                   "thumbnail_url" => "https://example.com/thumb.jpg"
+                   "thumbnail_url" => "https://example.com/thumb.jpg",
+                   "pinchflat_status" => %{"status" => "unknown"}
                  }
                ]
              } = json_response(conn, 200)
@@ -82,7 +87,7 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
       conn =
         conn
         |> api_auth()
-        |> get("/api/v1/youtube/search", %{q: "daft punk", max_results: 5, source_id: source.id})
+        |> get("/api/v1/sources/#{source.id}/youtube/search", %{q: "daft punk", max_results: 5})
 
       assert %{
                "items" => [
@@ -112,7 +117,7 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
       conn =
         conn
         |> api_auth()
-        |> get("/api/v1/youtube/search", %{q: "daft punk", max_results: 5, source_id: source.id})
+        |> get("/api/v1/sources/#{source.id}/youtube/search", %{q: "daft punk", max_results: 5})
 
       assert %{
                "items" => [
@@ -133,14 +138,44 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
     test "returns 404 when source_id is unknown", %{conn: conn} do
       Settings.set(youtube_api_key: "api-key")
 
-      expect_search_request()
+      conn =
+        conn
+        |> api_auth()
+        |> get("/api/v1/sources/999999/youtube/search", %{q: "daft punk", max_results: 5})
+
+      assert %{"error" => %{"code" => "source_not_found"}} = json_response(conn, 404)
+    end
+  end
+
+  describe "GET /api/v1/sources/:id/media/history" do
+    test "returns recent media for a source", %{conn: conn} do
+      source = playlist_source_fixture()
+
+      older =
+        media_item_fixture(source_id: source.id, media_id: "older000000", media_downloaded_at: ~U[2024-01-01 00:00:00Z])
+
+      newer =
+        media_item_fixture(source_id: source.id, media_id: "newer000000", media_downloaded_at: ~U[2024-01-02 00:00:00Z])
 
       conn =
         conn
         |> api_auth()
-        |> get("/api/v1/youtube/search", %{q: "daft punk", max_results: 5, source_id: 999_999})
+        |> get("/api/v1/sources/#{source.id}/media/history", %{limit: 2})
 
-      assert %{"error" => %{"code" => "source_not_found"}} = json_response(conn, 404)
+      assert %{"items" => [%{"media_id" => newer_id}, %{"media_id" => older_id}]} = json_response(conn, 200)
+      assert newer_id == newer.id
+      assert older_id == older.id
+    end
+
+    test "returns 422 for invalid history limit", %{conn: conn} do
+      source = playlist_source_fixture()
+
+      conn =
+        conn
+        |> api_auth()
+        |> get("/api/v1/sources/#{source.id}/media/history", %{limit: 101})
+
+      assert %{"error" => %{"code" => "invalid_limit"}} = json_response(conn, 422)
     end
   end
 

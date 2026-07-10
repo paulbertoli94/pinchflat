@@ -135,14 +135,12 @@ Tempus should show a reconnect-Google message and ask the user to reconnect Goog
 ### Search YouTube
 
 ```http
-GET /api/v1/youtube/search?q=daft%20punk&max_results=10&source_id=2
+GET /api/v1/sources/2/youtube/search?q=daft%20punk&max_results=10
 ```
 
 This endpoint requires YouTube API Key(s) in Pinchflat settings. Tempus can use it to search YouTube without receiving the raw API key in the QR code.
 
 Search is tuned for music by default. Pinchflat asks YouTube for video results in the Music category and medium duration videos, which usually fits songs better than generic YouTube search.
-
-`source_id` is optional. When provided, Pinchflat enriches each search result with status for that Source.
 
 Response:
 
@@ -175,6 +173,35 @@ Response:
 `max_results` defaults to `10` and must be between `1` and `25`.
 
 `pinchflat_status.in_source` means Pinchflat already knows that media item for the requested Source. It is derived from Pinchflat's database, not from a live YouTube playlist lookup. If the playlist was changed recently but has not been indexed yet, a video can still return `unknown`.
+
+### Source Media History
+
+```http
+GET /api/v1/sources/:source_id/media/history?limit=25
+```
+
+Returns recent media known to Pinchflat for a Source. Downloaded items are ordered by `downloaded_at` first, then recently discovered items.
+
+Response:
+
+```json
+{
+  "items": [
+    {
+      "youtube_id": "LdQU46djcAA",
+      "status": "completed",
+      "media_id": 123,
+      "media_uuid": "...",
+      "title": "Song title",
+      "downloaded_at": "2026-07-10T15:00:00Z",
+      "filepath": "/downloads/...",
+      "last_error": null
+    }
+  ]
+}
+```
+
+`limit` defaults to `25` and must be between `1` and `100`.
 
 ### Media Status By YouTube ID
 

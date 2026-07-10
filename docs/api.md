@@ -13,7 +13,7 @@ services:
   pinchflat:
     image: ghcr.io/kieraneglin/pinchflat:latest
     environment:
-      PINCHFLAT_API_TOKEN: "change-me"
+      PINCHFLAT_API_TOKEN: 'change-me'
 ```
 
 Requests must include:
@@ -93,8 +93,8 @@ Response:
 ```json
 {
   "items": [
-    {"youtube_id": "AAA00000000", "status": "completed", "media_id": 1},
-    {"youtube_id": "BBB00000000", "status": "unknown", "media_id": null}
+    { "youtube_id": "AAA00000000", "status": "completed", "media_id": 1 },
+    { "youtube_id": "BBB00000000", "status": "unknown", "media_id": null }
   ]
 }
 ```

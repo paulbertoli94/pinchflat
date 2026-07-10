@@ -1,6 +1,8 @@
 defmodule PinchflatWeb.SettingControllerTest do
   use PinchflatWeb.ConnCase
 
+  import Pinchflat.SourcesFixtures
+
   alias Pinchflat.Utils.FilesystemUtils
 
   describe "show settings" do
@@ -14,16 +16,33 @@ defmodule PinchflatWeb.SettingControllerTest do
       old_token = Application.get_env(:pinchflat, :api_token)
       on_exit(fn -> Application.put_env(:pinchflat, :api_token, old_token) end)
       Application.put_env(:pinchflat, :api_token, "test-token")
+      source = source_fixture(collection_type: "playlist", custom_name: "Liked", collection_id: "PL123")
+      source_fixture(collection_type: "playlist", custom_name: "Disabled", enabled: false)
+      source_fixture(collection_type: "channel", custom_name: "Channel")
 
       conn = get(conn, ~p"/settings")
       response = html_response(conn, 200)
+      payload = decoded_qr_payload(response)
 
       assert response =~ "API Access"
       assert response =~ "data-api-connection-qr"
       assert response =~ "tempus://pinchflat/connect#"
-      assert response =~ "pinchflat_api_connection"
-      assert response =~ "test-token"
-      assert response =~ "http://www.example.com/api/v1"
+      assert payload["type"] == "pinchflat_api_connection"
+      assert payload["version"] == 2
+      assert payload["token"] == "test-token"
+      assert payload["api_base_url"] == "http://www.example.com/api/v1"
+      assert payload["default_source_id"] == source.id
+
+      assert [
+               %{
+                 "id" => source_id,
+                 "name" => "Liked",
+                 "collection_type" => "playlist",
+                 "playlist_id" => "PL123"
+               }
+             ] = payload["sources"]
+
+      assert source_id == source.id
     end
 
     test "renders API token setup message when API token is not configured", %{conn: conn} do
@@ -76,5 +95,23 @@ defmodule PinchflatWeb.SettingControllerTest do
       assert redirected_to(conn) == ~p"/app_info"
       assert conn.assigns[:flash]["error"] == "Log file couldn't be found"
     end
+  end
+
+  defp decoded_qr_payload(response) do
+    [{"canvas", attrs, _children}] =
+      response
+      |> Floki.parse_document!()
+      |> Floki.find("[data-api-connection-qr]")
+
+    qr_content =
+      attrs
+      |> Map.new()
+      |> Map.fetch!("data-qr-content")
+
+    "tempus://pinchflat/connect#" <> encoded_payload = qr_content
+
+    encoded_payload
+    |> URI.decode()
+    |> Jason.decode!()
   end
 end

@@ -1,7 +1,11 @@
 defmodule PinchflatWeb.Settings.SettingController do
   use PinchflatWeb, :controller
 
+  import Ecto.Query, warn: false
+
+  alias Pinchflat.Repo
   alias Pinchflat.Settings
+  alias Pinchflat.Sources.Source
 
   def show(conn, _params) do
     setting = Settings.record()
@@ -52,12 +56,16 @@ defmodule PinchflatWeb.Settings.SettingController do
   defp api_connection_payload(conn) do
     case Application.get_env(:pinchflat, :api_token) do
       token when is_binary(token) and token != "" ->
+        sources = api_sources()
+
         payload =
           Jason.encode!(%{
             type: "pinchflat_api_connection",
-            version: 1,
+            version: 2,
             api_base_url: api_base_url(conn),
-            token: token
+            token: token,
+            default_source_id: default_source_id(sources),
+            sources: sources
           })
 
         "tempus://pinchflat/connect##{URI.encode(payload)}"
@@ -74,6 +82,31 @@ defmodule PinchflatWeb.Settings.SettingController do
     |> Map.put(:path, "/api/v1")
     |> Map.put(:query, nil)
     |> URI.to_string()
+  end
+
+  defp api_sources do
+    Source
+    |> where([s], s.enabled == true and s.collection_type == :playlist)
+    |> order_by([s], asc: s.custom_name)
+    |> Repo.all()
+    |> Enum.map(fn source ->
+      %{
+        id: source.id,
+        uuid: source.uuid,
+        name: source.custom_name,
+        collection_type: source.collection_type,
+        playlist_id: source.collection_id,
+        original_url: source.original_url,
+        media_profile_id: source.media_profile_id
+      }
+    end)
+  end
+
+  defp default_source_id(sources) do
+    case sources do
+      [%{id: id}] -> id
+      _ -> nil
+    end
   end
 
   defp api_token_configured? do

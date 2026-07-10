@@ -17,9 +17,6 @@ on:
         required: true
         default: 'dev'
 
-  push:
-    branches:
-      - master
   release:
     types:
       - published

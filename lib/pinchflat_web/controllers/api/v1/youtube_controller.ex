@@ -3,17 +3,56 @@ defmodule PinchflatWeb.Api.V1.YoutubeController do
 
   require Logger
 
+  alias Pinchflat.Api
   alias Pinchflat.Youtube.Search
 
   def search(conn, params) do
     case Search.search(Map.get(params, "q"), max_results: Map.get(params, "max_results", 10)) do
-      {:ok, items} -> json(conn, %{items: items})
+      {:ok, items} -> render_search_results(conn, items, Map.get(params, "source_id"))
       error -> render_error(conn, error)
     end
   end
 
+  defp render_search_results(conn, items, nil), do: json(conn, %{items: items})
+  defp render_search_results(conn, items, ""), do: json(conn, %{items: items})
+
+  defp render_search_results(conn, items, source_id) do
+    youtube_ids = Enum.map(items, & &1.youtube_id)
+
+    with {:ok, source} <- Api.get_source(source_id),
+         {:ok, statuses} <- Api.batch_media_status(source, youtube_ids) do
+      json(conn, %{items: merge_statuses(items, statuses, source.id)})
+    else
+      error -> render_error(conn, error)
+    end
+  end
+
+  defp merge_statuses(items, statuses, source_id) do
+    statuses_by_id = Map.new(statuses, &{&1.youtube_id, &1})
+
+    Enum.map(items, fn item ->
+      status = Map.fetch!(statuses_by_id, item.youtube_id)
+
+      Map.put(item, :pinchflat_status, %{
+        source_id: source_id,
+        status: status.status,
+        in_source: status.status != "unknown",
+        already_downloaded: status.status == "completed",
+        media_id: status.media_id,
+        media_uuid: status.media_uuid,
+        downloaded_at: status.downloaded_at,
+        filepath: status.filepath,
+        last_error: status.last_error
+      })
+    end)
+  end
+
   defp render_error(conn, {:error, :youtube_api_key_not_configured}) do
     error(conn, :conflict, "youtube_api_key_not_configured", "YouTube API key is not configured in Pinchflat settings")
+  end
+
+  defp render_error(conn, {:error, :source_not_found}) do
+    error(conn, :not_found, "source_not_found", "Source not found")
   end
 
   defp render_error(conn, {:error, :empty_query}) do

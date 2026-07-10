@@ -152,7 +152,8 @@ defmodule Pinchflat.Youtube.Search do
     |> Enum.map(&Map.get(&1, "musicResponsiveListItemFlexColumnRenderer", %{}))
   end
 
-  defp runs_from_column(column), do: get_in(column, ["text", "runs"]) || []
+  defp runs_from_column(column) when is_map(column), do: get_in(column, ["text", "runs"]) || []
+  defp runs_from_column(_column), do: []
 
   defp text_from_runs(nil), do: nil
 

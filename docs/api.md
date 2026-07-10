@@ -188,7 +188,7 @@ Only results with a `youtube_id` include `pinchflat_status`. Album, artist, and 
 GET /api/v1/sources/:source_id/media/history?limit=25
 ```
 
-Returns recent media known to Pinchflat for a Source. Downloaded items are ordered by `downloaded_at` first, then recently discovered items.
+Returns recent media known to Pinchflat for a Source plus recent API requests made by Tempus. This lets Tempus show requested videos immediately, even before Pinchflat has indexed them into `media_items`.
 
 Response:
 
@@ -196,18 +196,38 @@ Response:
 {
   "items": [
     {
+      "history_type": "media",
       "youtube_id": "LdQU46djcAA",
       "status": "completed",
       "media_id": 123,
       "media_uuid": "...",
       "title": "Song title",
       "downloaded_at": "2026-07-10T15:00:00Z",
+      "requested_at": null,
+      "request_type": null,
+      "event_at": "2026-07-10T15:00:00Z",
       "filepath": "/downloads/...",
+      "last_error": null
+    },
+    {
+      "history_type": "request",
+      "youtube_id": "AAA00000000",
+      "status": "requested",
+      "media_id": null,
+      "media_uuid": null,
+      "title": null,
+      "downloaded_at": null,
+      "requested_at": "2026-07-10T15:01:00Z",
+      "request_type": "sync",
+      "event_at": "2026-07-10T15:01:00Z",
+      "filepath": null,
       "last_error": null
     }
   ]
 }
 ```
+
+`history_type` is either `media` or `request`. `request_type` is `sync` or `import` for API requests and `null` for media rows.
 
 `limit` defaults to `25` and must be between `1` and `100`.
 

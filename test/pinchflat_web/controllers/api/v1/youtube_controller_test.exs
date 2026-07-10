@@ -175,6 +175,33 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
       assert older_id == older.id
     end
 
+    test "includes API requests that are not known media yet", %{conn: conn} do
+      source = playlist_source_fixture()
+      requested_youtube_id = "Req00000001"
+      authed_conn = api_auth(conn)
+
+      post(authed_conn, "/api/v1/sources/#{source.id}/sync", %{youtube_ids: [requested_youtube_id]})
+
+      conn =
+        authed_conn
+        |> get("/api/v1/sources/#{source.id}/media/history", %{limit: 10})
+
+      assert %{
+               "items" => [
+                 %{
+                   "history_type" => "request",
+                   "request_type" => "sync",
+                   "youtube_id" => ^requested_youtube_id,
+                   "status" => "requested",
+                   "media_id" => nil,
+                   "requested_at" => requested_at
+                 }
+               ]
+             } = json_response(conn, 200)
+
+      assert is_binary(requested_at)
+    end
+
     test "returns 422 for invalid history limit", %{conn: conn} do
       source = playlist_source_fixture()
 

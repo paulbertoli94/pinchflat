@@ -8,6 +8,7 @@ defmodule Pinchflat.Api do
   alias Pinchflat.Repo
   alias Pinchflat.Media
   alias Pinchflat.Tasks
+  alias Pinchflat.Api.Request
   alias Pinchflat.Sources.Source
   alias Pinchflat.Media.MediaItem
   alias Pinchflat.SlowIndexing.SlowIndexingHelpers
@@ -31,10 +32,14 @@ defmodule Pinchflat.Api do
     end
   end
 
-  def sync_source(%Source{} = source, youtube_ids) do
+  def sync_source(%Source{} = source, youtube_ids, opts \\ []) do
     with :ok <- validate_enabled_source(source),
          :ok <- validate_playlist_source(source),
          {:ok, normalized_ids} <- normalize_youtube_ids(youtube_ids) do
+      if Keyword.get(opts, :log_request, true) do
+        log_api_requests(source, normalized_ids, :sync)
+      end
+
       result = SlowIndexingHelpers.kickoff_indexing_task(source, %{force: true})
 
       case result do
@@ -49,8 +54,9 @@ defmodule Pinchflat.Api do
     with :ok <- validate_enabled_source(source),
          :ok <- validate_playlist_source(source),
          {:ok, normalized_ids} <- normalize_youtube_ids(youtube_ids),
+         :ok <- log_api_requests(source, normalized_ids, :import),
          {:ok, imported_ids} <- OauthClient.insert_playlist_items(source, normalized_ids),
-         {:ok, _synced_ids} <- sync_source(source, imported_ids) do
+         {:ok, _synced_ids} <- sync_source(source, imported_ids, log_request: false) do
       {:ok, imported_ids}
     end
   end
@@ -90,7 +96,7 @@ defmodule Pinchflat.Api do
   def recent_media_for_source(%Source{} = source, opts \\ []) do
     limit = Keyword.get(opts, :limit, 25)
 
-    items =
+    media_items =
       MediaItem
       |> where([mi], mi.source_id == ^source.id)
       |> order_by([mi],
@@ -100,7 +106,20 @@ defmodule Pinchflat.Api do
       )
       |> limit(^limit)
       |> Repo.all()
-      |> Enum.map(&media_status/1)
+      |> Enum.map(&media_history_status/1)
+
+    request_items =
+      Request
+      |> where([request], request.source_id == ^source.id)
+      |> order_by([request], desc: request.inserted_at)
+      |> limit(^limit)
+      |> Repo.all()
+      |> Enum.map(&request_status/1)
+
+    items =
+      (media_items ++ request_items)
+      |> Enum.sort_by(&Map.get(&1, :event_at), {:desc, DateTime})
+      |> Enum.take(limit)
 
     {:ok, items}
   end
@@ -161,6 +180,54 @@ defmodule Pinchflat.Api do
       filepath: nil,
       last_error: nil
     }
+  end
+
+  defp media_history_status(%MediaItem{} = media_item) do
+    media_item
+    |> media_status()
+    |> Map.merge(%{
+      history_type: "media",
+      requested_at: nil,
+      request_type: nil,
+      event_at: media_item.media_downloaded_at || media_item.inserted_at
+    })
+  end
+
+  defp request_status(%Request{} = request) do
+    %{
+      history_type: "request",
+      youtube_id: request.youtube_id,
+      status: "requested",
+      media_id: nil,
+      media_uuid: nil,
+      title: nil,
+      downloaded_at: nil,
+      requested_at: request.inserted_at,
+      request_type: to_string(request.request_type),
+      event_at: request.inserted_at,
+      filepath: nil,
+      last_error: nil
+    }
+  end
+
+  defp log_api_requests(%Source{} = source, youtube_ids, request_type) do
+    entries =
+      Enum.map(youtube_ids, fn youtube_id ->
+        now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+        %{
+          source_id: source.id,
+          youtube_id: youtube_id,
+          request_type: request_type,
+          inserted_at: now,
+          updated_at: now
+        }
+      end)
+
+    case Repo.insert_all(Request, entries) do
+      {_count, nil} -> :ok
+      {_count, _rows} -> :ok
+    end
   end
 
   defp derive_status(%MediaItem{media_filepath: filepath}) when is_binary(filepath), do: "completed"

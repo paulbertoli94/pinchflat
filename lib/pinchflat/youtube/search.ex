@@ -97,7 +97,7 @@ defmodule Pinchflat.Youtube.Search do
     artist_id = browse_id_for_page_type(all_runs, "MUSIC_PAGE_TYPE_ARTIST")
 
     %{
-      type: type || infer_type(renderer),
+      type: type || infer_type(renderer, all_runs),
       youtube_id: video_id(renderer, all_runs),
       title: text_from_runs(title_runs),
       artist: artist,
@@ -125,7 +125,7 @@ defmodule Pinchflat.Youtube.Search do
     artist_id = browse_id_for_page_type(all_runs, "MUSIC_PAGE_TYPE_ARTIST")
 
     %{
-      type: card |> get_in(["subtitle", "runs"]) |> text_from_runs() |> item_type() || infer_type(card),
+      type: card |> get_in(["subtitle", "runs"]) |> text_from_runs() |> item_type() || infer_type(card, all_runs),
       youtube_id: video_id(card, all_runs),
       title: text_from_runs(title_runs),
       artist: artist,
@@ -260,9 +260,22 @@ defmodule Pinchflat.Youtube.Search do
     end
   end
 
-  defp infer_type(renderer) do
-    if present?(get_in(renderer, ["playlistItemData", "videoId"])) do
-      "song"
+  defp infer_type(renderer, runs) do
+    cond do
+      present?(get_in(renderer, ["playlistItemData", "videoId"])) ->
+        "song"
+
+      present?(browse_id_for_page_type(runs, "MUSIC_PAGE_TYPE_ALBUM")) ->
+        "album"
+
+      present?(browse_id_for_page_type(runs, "MUSIC_PAGE_TYPE_ARTIST")) ->
+        "artist"
+
+      present?(browse_id_for_page_type(runs, "MUSIC_PAGE_TYPE_PLAYLIST")) ->
+        "playlist"
+
+      true ->
+        nil
     end
   end
 

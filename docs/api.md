@@ -146,6 +146,8 @@ Results are diversified before `max_results` is applied. When YouTube Music retu
 query, Pinchflat keeps the first available song, album, artist, playlist, and video near the top instead of letting one
 category consume the whole response.
 
+Pinchflat also infers `type` from YouTube Music browse metadata when the result label is missing.
+
 Response:
 
 ```json

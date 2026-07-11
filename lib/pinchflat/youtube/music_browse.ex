@@ -77,7 +77,7 @@ defmodule Pinchflat.Youtube.MusicBrowse do
     |> music_shelves()
     |> Enum.flat_map(fn shelf ->
       shelf
-      |> Map.get("contents", [])
+      |> shelf_contents()
       |> Enum.map(&parse_track(&1, artist, album_id))
     end)
     |> Enum.reject(&is_nil/1)
@@ -86,7 +86,7 @@ defmodule Pinchflat.Youtube.MusicBrowse do
   defp parse_shelf_items(sections, title, fallback_type) do
     sections
     |> Enum.filter(&(shelf_title(&1) == title))
-    |> Enum.flat_map(&Map.get(&1, "contents", []))
+    |> Enum.flat_map(&shelf_contents/1)
     |> Enum.map(&parse_list_item(&1, fallback_type))
     |> Enum.reject(&is_nil/1)
   end
@@ -119,7 +119,7 @@ defmodule Pinchflat.Youtube.MusicBrowse do
     youtube_id = video_id(renderer, all_runs)
 
     %{
-      type: item_type_for(all_runs) || fallback_type,
+      type: item_type_for(all_runs, fallback_type, youtube_id),
       youtube_id: youtube_id,
       browse_id: browse_id,
       title: text_from_runs(title_runs),
@@ -139,7 +139,7 @@ defmodule Pinchflat.Youtube.MusicBrowse do
     all_runs = title_runs ++ subtitle_runs
 
     %{
-      type: item_type_for(all_runs) || fallback_type,
+      type: item_type_for(all_runs, fallback_type, video_id(renderer, all_runs)),
       youtube_id: video_id(renderer, all_runs),
       browse_id: browse_id(all_runs) || get_in(renderer, ["navigationEndpoint", "browseEndpoint", "browseId"]),
       title: text_from_runs(title_runs),
@@ -157,8 +157,10 @@ defmodule Pinchflat.Youtube.MusicBrowse do
   end
 
   defp music_shelves(payload) do
-    payload
-    |> collect_values("musicShelfRenderer")
+    music_shelves = collect_values(payload, "musicShelfRenderer")
+    carousel_shelves = collect_values(payload, "musicCarouselShelfRenderer")
+
+    (music_shelves ++ carousel_shelves)
     |> Enum.reject(&is_nil/1)
   end
 
@@ -186,7 +188,12 @@ defmodule Pinchflat.Youtube.MusicBrowse do
 
   defp do_collect_values(_data, _target_key, acc), do: acc
 
-  defp shelf_title(shelf), do: shelf |> get_in(["title", "runs"]) |> text_from_runs()
+  defp shelf_title(shelf) do
+    text_from_runs(get_in(shelf, ["title", "runs"])) ||
+      text_from_runs(get_in(shelf, ["header", "musicCarouselShelfBasicHeaderRenderer", "title", "runs"]))
+  end
+
+  defp shelf_contents(shelf), do: Map.get(shelf, "contents", [])
 
   defp flex_column(renderer, index) do
     renderer
@@ -263,6 +270,18 @@ defmodule Pinchflat.Youtube.MusicBrowse do
       "browseEndpointContextMusicConfig",
       "pageType"
     ])
+  end
+
+  defp item_type_for(runs, fallback_type, youtube_id) when fallback_type in ["song", "video"] do
+    if present?(youtube_id) do
+      fallback_type
+    else
+      item_type_for(runs) || fallback_type
+    end
+  end
+
+  defp item_type_for(runs, fallback_type, _youtube_id) do
+    item_type_for(runs) || fallback_type
   end
 
   defp item_type_for(runs) do

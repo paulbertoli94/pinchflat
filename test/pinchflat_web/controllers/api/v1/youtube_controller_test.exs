@@ -275,6 +275,7 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
                  "title" => "Artist",
                  "top_songs" => [
                    %{
+                     "type" => "song",
                      "youtube_id" => @youtube_id,
                      "title" => "Song title",
                      "pinchflat_status" => %{"status" => "unknown"}
@@ -591,7 +592,14 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
                       %{
                         musicShelfRenderer: %{title: %{runs: [%{text: "Top songs"}]}, contents: [youtube_music_song()]}
                       },
-                      %{musicShelfRenderer: %{title: %{runs: [%{text: "Albums"}]}, contents: [artist_album()]}}
+                      %{
+                        musicCarouselShelfRenderer: %{
+                          header: %{
+                            musicCarouselShelfBasicHeaderRenderer: %{title: %{runs: [%{text: "Albums"}]}}
+                          },
+                          contents: [artist_album()]
+                        }
+                      }
                     ]
                   }
                 }

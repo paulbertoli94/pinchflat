@@ -85,6 +85,14 @@ defmodule Pinchflat.Youtube.Search do
     end
   end
 
+  defp parse_section(%{"itemSectionRenderer" => %{"contents" => contents}}) when is_list(contents) do
+    Enum.flat_map(contents, &parse_section/1)
+  end
+
+  defp parse_section(%{"musicResponsiveListItemRenderer" => renderer}) do
+    [parse_music_list_item(%{"musicResponsiveListItemRenderer" => renderer}, nil)]
+  end
+
   defp parse_section(_section), do: []
 
   defp parse_music_list_item(%{"musicResponsiveListItemRenderer" => renderer}, type) do
@@ -97,7 +105,7 @@ defmodule Pinchflat.Youtube.Search do
     artist_id = browse_id_for_page_type(all_runs, "MUSIC_PAGE_TYPE_ARTIST")
 
     %{
-      type: type || infer_type(renderer, all_runs),
+      type: type || type_from_subtitle(subtitle_runs) || infer_type(renderer, all_runs),
       youtube_id: video_id(renderer, all_runs),
       title: text_from_runs(title_runs),
       artist: artist,
@@ -125,7 +133,7 @@ defmodule Pinchflat.Youtube.Search do
     artist_id = browse_id_for_page_type(all_runs, "MUSIC_PAGE_TYPE_ARTIST")
 
     %{
-      type: card |> get_in(["subtitle", "runs"]) |> text_from_runs() |> item_type() || infer_type(card, all_runs),
+      type: type_from_subtitle(subtitle_runs) || infer_type(card, all_runs),
       youtube_id: video_id(card, all_runs),
       title: text_from_runs(title_runs),
       artist: artist,
@@ -141,6 +149,8 @@ defmodule Pinchflat.Youtube.Search do
     }
     |> reject_empty_item()
   end
+
+  defp reject_empty_item(%{type: "episode"}), do: nil
 
   defp reject_empty_item(%{title: title, youtube_id: youtube_id, browse_id: browse_id} = item) do
     if present?(title) and (present?(youtube_id) or present?(browse_id)), do: item
@@ -241,10 +251,17 @@ defmodule Pinchflat.Youtube.Search do
     end
   end
 
+  defp type_from_subtitle(runs) do
+    runs
+    |> Enum.map(&Map.get(&1, "text"))
+    |> Enum.find_value(&item_type/1)
+  end
+
   defp item_type(nil), do: nil
 
   defp item_type(label) do
     label
+    |> String.trim()
     |> String.downcase()
     |> case do
       "songs" -> "song"
@@ -253,17 +270,20 @@ defmodule Pinchflat.Youtube.Search do
       "video" -> "video"
       "albums" -> "album"
       "album" -> "album"
+      "single" -> "album"
+      "ep" -> "album"
       "artists" -> "artist"
       "artist" -> "artist"
       "playlists" -> "playlist"
       "playlist" -> "playlist"
+      "episode" -> "episode"
       _other -> nil
     end
   end
 
   defp infer_type(renderer, runs) do
     cond do
-      present?(get_in(renderer, ["playlistItemData", "videoId"])) ->
+      present?(video_id(renderer, runs)) ->
         "song"
 
       present?(browse_id_for_page_type(runs, "MUSIC_PAGE_TYPE_ALBUM")) ->

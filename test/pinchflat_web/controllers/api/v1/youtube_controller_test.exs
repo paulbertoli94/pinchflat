@@ -124,6 +124,54 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
       assert Enum.map(items, & &1["type"]) == ["song", "album", "artist", "song"]
     end
 
+    test "reads current item sections and separates songs from videos", %{conn: conn} do
+      source = playlist_source_fixture()
+
+      song =
+        youtube_music_song("AAAAAAAAAAA", "Creep")
+        |> put_in(
+          [
+            :musicResponsiveListItemRenderer,
+            :flexColumns,
+            Access.at(1),
+            :musicResponsiveListItemFlexColumnRenderer,
+            :text,
+            :runs
+          ],
+          [%{text: "Song"}, %{text: " • "}, %{text: "Radiohead", navigationEndpoint: artist_navigation_endpoint()}]
+        )
+
+      video =
+        youtube_music_song("BBBBBBBBBBB", "Creep video")
+        |> put_in(
+          [
+            :musicResponsiveListItemRenderer,
+            :flexColumns,
+            Access.at(1),
+            :musicResponsiveListItemFlexColumnRenderer,
+            :text,
+            :runs
+          ],
+          [%{text: "Video"}, %{text: " • "}, %{text: "Radiohead", navigationEndpoint: artist_navigation_endpoint()}]
+        )
+
+      expect_search_request([
+        %{itemSectionRenderer: %{contents: [song]}},
+        %{itemSectionRenderer: %{contents: [search_album()]}},
+        %{itemSectionRenderer: %{contents: [search_artist()]}},
+        %{itemSectionRenderer: %{contents: [video]}}
+      ])
+
+      conn =
+        conn
+        |> api_auth()
+        |> get("/api/v1/sources/#{source.id}/youtube/search", %{q: "daft punk", max_results: 25})
+
+      assert %{"items" => items} = json_response(conn, 200)
+      assert Enum.map(items, & &1["type"]) == ["song", "album", "artist", "video"]
+      assert Enum.map(items, & &1["title"]) == ["Creep", "Album result", "Artist result", "Creep video"]
+    end
+
     test "infers artist type for unlabeled top result cards", %{conn: conn} do
       source = playlist_source_fixture()
 
@@ -151,6 +199,32 @@ defmodule PinchflatWeb.Api.V1.YoutubeControllerTest do
       assert %{
                "items" => [%{"type" => "artist", "artist_id" => "UCRESEARCHARTIST"}]
              } = json_response(conn, 200)
+    end
+
+    test "classifies a video card from its subtitle before the linked artist", %{conn: conn} do
+      source = playlist_source_fixture()
+
+      expect_search_request([
+        %{
+          musicCardShelfRenderer: %{
+            title: %{runs: [%{text: "Creep", navigationEndpoint: %{watchEndpoint: %{videoId: @youtube_id}}}]},
+            subtitle: %{
+              runs: [
+                %{text: "Video"},
+                %{text: " • "},
+                %{text: "Radiohead", navigationEndpoint: artist_navigation_endpoint()}
+              ]
+            }
+          }
+        }
+      ])
+
+      conn =
+        conn
+        |> api_auth()
+        |> get("/api/v1/sources/#{source.id}/youtube/search", %{q: "daft punk", max_results: 5})
+
+      assert %{"items" => [%{"type" => "video", "youtube_id" => @youtube_id}]} = json_response(conn, 200)
     end
 
     test "includes unknown Pinchflat status when source_id is provided and media is not known", %{conn: conn} do

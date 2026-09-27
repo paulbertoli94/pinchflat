@@ -17,6 +17,7 @@ defmodule Pinchflat.Downloading.MediaDownloader do
   alias Pinchflat.Metadata.MetadataFileHelpers
   alias Pinchflat.Utils.FilesystemUtils
   alias Pinchflat.Downloading.DownloadOptionBuilder
+  alias Pinchflat.Downloading.MusicTagNormalizer
 
   alias Pinchflat.YtDlp.Media, as: YtDlpMedia
 
@@ -78,6 +79,11 @@ defmodule Pinchflat.Downloading.MediaDownloader do
 
     case download_with_options(media_item.original_url, media_with_preloads, output_filepath, override_opts) do
       {:ok, parsed_json} ->
+        if media_with_preloads.source.media_profile.preferred_resolution == :audio &&
+             media_with_preloads.source.media_profile.embed_metadata do
+          MusicTagNormalizer.normalize(parsed_json)
+        end
+
         update_media_item_from_parsed_json(media_with_preloads, parsed_json)
 
       {:error, :unsuitable_for_download} ->

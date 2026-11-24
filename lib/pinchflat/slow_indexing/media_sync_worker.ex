@@ -54,8 +54,11 @@ defmodule Pinchflat.SlowIndexing.MediaSyncWorker do
             end
           end)
 
-        {:error, output, status} -> {:error, {output, status}}
-        error -> error
+        {:error, output, status} ->
+          {:error, {output, status}}
+
+        error ->
+          error
       end
     else
       :ok

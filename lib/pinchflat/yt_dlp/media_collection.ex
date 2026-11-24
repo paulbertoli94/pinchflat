@@ -10,6 +10,25 @@ defmodule Pinchflat.YtDlp.MediaCollection do
   alias Pinchflat.YtDlp.Media, as: YtDlpMedia
 
   @doc """
+  Lists playlist IDs without extracting each video's formats or metadata.
+  Reads the entire playlist because new entries may appear at any position.
+  """
+  def get_media_ids_for_collection(url, addl_opts \\ []) do
+    command_opts = [:flat_playlist, :skip_download, :no_warnings]
+
+    with {:ok, output} <- backend_runner().run(url, :get_media_ids_for_collection, command_opts, "%(id)s", addl_opts) do
+      ids =
+        output
+        |> String.split("\n", trim: true)
+        |> Enum.map(&String.trim/1)
+        |> Enum.reject(&(&1 in ["", "NA"]))
+        |> Enum.uniq()
+
+      {:ok, ids}
+    end
+  end
+
+  @doc """
   Returns a list of maps representing the media in the collection.
   Optionally takes a list of additional command options to pass to yt-dlp
   or configuration-related options to pass to the runner.

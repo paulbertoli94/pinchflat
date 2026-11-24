@@ -13,6 +13,7 @@ defmodule Pinchflat.SlowIndexing.SlowIndexingHelpersTest do
   alias Pinchflat.Downloading.MediaDownloadWorker
   alias Pinchflat.SlowIndexing.SlowIndexingHelpers
   alias Pinchflat.SlowIndexing.MediaCollectionIndexingWorker
+  alias Pinchflat.SlowIndexing.MediaIndexingWorker
 
   setup do
     {:ok, %{source: source_fixture()}}
@@ -481,17 +482,49 @@ defmodule Pinchflat.SlowIndexing.SlowIndexingHelpersTest do
       SlowIndexingHelpers.index_and_enqueue_download_for_media_items(source)
     end
 
-    test "a download archive is not used if the source is not a channel" do
+    test "playlists list IDs and enqueue only unknown videos, regardless of position" do
       source = source_fixture(%{collection_type: :playlist})
+      media_item_fixture(source_id: source.id, media_id: "known", media_downloaded_at: now())
 
-      expect(YtDlpRunnerMock, :run, fn _url, :get_media_attributes_for_collection, opts, _ot, _addl_opts ->
-        refute :break_on_existing in opts
-        refute Keyword.has_key?(opts, :download_archive)
+      expect(YtDlpRunnerMock, :run, fn _url, :get_media_ids_for_collection, opts, _ot, _addl_opts ->
+        assert :flat_playlist in opts
 
-        {:ok, source_attributes_return_fixture()}
+        {:ok, "known\nnew-at-end\nnew-at-end\n"}
       end)
 
-      SlowIndexingHelpers.index_and_enqueue_download_for_media_items(source)
+      assert [] = SlowIndexingHelpers.index_and_enqueue_download_for_media_items(source)
+      assert [job] = all_enqueued(worker: MediaIndexingWorker)
+      assert job.args == %{"source_id" => source.id, "youtube_id" => "new-at-end"}
+      assert Repo.reload!(source).last_indexed_at
+    end
+
+    test "an unchanged playlist creates no metadata jobs" do
+      source = source_fixture(collection_type: :playlist)
+      media_item_fixture(source_id: source.id, media_id: "known", media_downloaded_at: now())
+      expect(YtDlpRunnerMock, :run, fn _, :get_media_ids_for_collection, _, _, _ -> {:ok, "known\n"} end)
+
+      assert [] = SlowIndexingHelpers.index_and_enqueue_download_for_media_items(source)
+      assert [] = all_enqueued(worker: MediaIndexingWorker)
+      assert [] = all_enqueued(worker: MediaDownloadWorker)
+    end
+
+    test "a failed lightweight scan does not advance last_indexed_at" do
+      source = source_fixture(collection_type: :playlist, last_indexed_at: nil)
+      expect(YtDlpRunnerMock, :run, fn _, :get_media_ids_for_collection, _, _, _ -> {:error, "network error", 1} end)
+
+      assert_raise MatchError, fn -> SlowIndexingHelpers.index_and_enqueue_download_for_media_items(source) end
+      assert Repo.reload!(source).last_indexed_at == nil
+    end
+
+    test "a forced playlist refresh still extracts full metadata" do
+      source = source_fixture(collection_type: :playlist)
+
+      expect(YtDlpRunnerMock, :run, fn _, :get_media_attributes_for_collection, opts, _, _ ->
+        refute :flat_playlist in opts
+        {:ok, ""}
+      end)
+
+      assert [] = SlowIndexingHelpers.index_and_enqueue_download_for_media_items(source, was_forced: true)
     end
 
     test "a download archive is not used if the source has never been indexed before" do

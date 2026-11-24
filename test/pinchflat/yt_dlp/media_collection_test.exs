@@ -8,6 +8,27 @@ defmodule Pinchflat.YtDlp.MediaCollectionTest do
 
   @channel_url "https://www.youtube.com/c/PinchflatTestChannel"
 
+  describe "get_media_ids_for_collection/2" do
+    test "uses flat extraction and returns all unique IDs" do
+      expect(YtDlpRunnerMock, :run, fn url, :get_media_ids_for_collection, opts, template, extra ->
+        assert url == @channel_url
+        assert :flat_playlist in opts
+        assert :skip_download in opts
+        assert template == "%(id)s"
+        assert extra == [use_cookies: true]
+        {:ok, "first\n\nknown\nlast\nfirst\nNA\n"}
+      end)
+
+      assert {:ok, ["first", "known", "last"]} =
+               MediaCollection.get_media_ids_for_collection(@channel_url, use_cookies: true)
+    end
+
+    test "propagates extraction errors" do
+      expect(YtDlpRunnerMock, :run, fn _, :get_media_ids_for_collection, _, _, _ -> {:error, "network error", 1} end)
+      assert {:error, "network error", 1} = MediaCollection.get_media_ids_for_collection(@channel_url)
+    end
+  end
+
   describe "get_media_attributes_for_collection/2" do
     test "returns a list of video attributes with no blank elements" do
       expect(YtDlpRunnerMock, :run, fn _url, :get_media_attributes_for_collection, _opts, _ot, _addl_opts ->

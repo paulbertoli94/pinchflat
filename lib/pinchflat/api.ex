@@ -11,7 +11,7 @@ defmodule Pinchflat.Api do
   alias Pinchflat.Api.Request
   alias Pinchflat.Sources.Source
   alias Pinchflat.Media.MediaItem
-  alias Pinchflat.SlowIndexing.SlowIndexingHelpers
+  alias Pinchflat.SlowIndexing.MediaSyncWorker
   alias Pinchflat.Youtube.OauthClient
 
   @youtube_id_regex ~r/^[A-Za-z0-9_-]{11}$/
@@ -40,10 +40,10 @@ defmodule Pinchflat.Api do
         log_api_requests(source, normalized_ids, :sync)
       end
 
-      result = SlowIndexingHelpers.kickoff_indexing_task(source, %{force: true})
+      verify_membership = Keyword.get(opts, :verify_membership, true)
 
-      case result do
-        {:ok, _task} -> {:ok, normalized_ids}
+      case MediaSyncWorker.kickoff_with_task(source, normalized_ids, verify_membership: verify_membership) do
+        {:ok, _} -> {:ok, normalized_ids}
         {:error, :duplicate_job} -> {:ok, normalized_ids}
         {:error, error} -> {:error, {:enqueue_failed, error}}
       end
@@ -56,7 +56,7 @@ defmodule Pinchflat.Api do
          {:ok, normalized_ids} <- normalize_youtube_ids(youtube_ids),
          :ok <- log_api_requests(source, normalized_ids, :import),
          {:ok, imported_ids} <- OauthClient.insert_playlist_items(source, normalized_ids),
-         {:ok, _synced_ids} <- sync_source(source, imported_ids, log_request: false) do
+         {:ok, _synced_ids} <- sync_source(source, imported_ids, log_request: false, verify_membership: false) do
       {:ok, imported_ids}
     end
   end

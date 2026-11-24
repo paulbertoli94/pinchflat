@@ -49,8 +49,7 @@ Body:
 
 ```json
 {
-  "youtube_ids": ["LdQU46djcAA"],
-  "force_full_index": false
+  "youtube_ids": ["LdQU46djcAA"]
 }
 ```
 
@@ -62,8 +61,7 @@ curl -X POST \
   -H "Authorization: Bearer $PINCHFLAT_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "youtube_ids": ["LdQU46djcAA"],
-    "force_full_index": false
+    "youtube_ids": ["LdQU46djcAA"]
   }'
 ```
 
@@ -77,7 +75,9 @@ Response:
 }
 ```
 
-This enqueues Pinchflat's existing source indexing worker with `force: true`. New media creation and downloads are handled by the existing indexing and download pipeline, including media profile settings, cookies, yt-dlp options, naming, metadata, thumbnails, retry behavior, and post-processing.
+This queues a lightweight playlist membership check, followed by metadata extraction and download jobs only for the requested IDs. Downloaded videos are skipped. Requests do not cancel or restart playlist scans. Downloads retain media profile settings, cookies, naming, metadata, thumbnails, retry behavior, and post-processing.
+
+Scheduled playlist scans also read the full list of IDs without extracting each video's formats, then enqueue metadata jobs only for unknown videos. This detects additions at any playlist position. Full metadata refresh remains available through the Source's manual Force Index action.
 
 ### Import To Source Playlist
 
@@ -116,7 +116,7 @@ Response:
 }
 ```
 
-This endpoint uses Google OAuth to call YouTube `playlistItems.insert` for the playlist configured on the Pinchflat Source. Videos already present in the playlist are treated as successfully imported. After the playlist write, Pinchflat enqueues the same forced source indexing used by `/sync`.
+This endpoint uses Google OAuth to call YouTube `playlistItems.insert` for the playlist configured on the Pinchflat Source. Videos already present in the playlist are treated as successfully imported. After YouTube confirms membership, Pinchflat queues only those videos, without rescanning the playlist.
 
 If Google authorization expires or is revoked, `/import` returns:
 
@@ -375,7 +375,7 @@ Response:
 
 `youtube_ids` accepts only YouTube video IDs: 11 characters using letters, digits, `_`, or `-`. Full URLs and empty strings are rejected. A batch may contain at most 500 IDs. Duplicate IDs are removed before processing.
 
-`/sync` is idempotent for the same source and IDs. `/import` is also idempotent for videos that are already in the YouTube playlist. Both endpoints use Pinchflat's existing Oban job uniqueness and source indexing helper. Existing downloaded media is not downloaded again, pending or queued media is not duplicated, and failed media is not retried unless the normal Pinchflat indexing flow would do so.
+`/sync` is idempotent for the same source and IDs. `/import` is also idempotent for videos that are already in the YouTube playlist. Batch and per-video jobs use Oban uniqueness across queued, running, and retryable jobs. Downloaded media is skipped and existing download retries retain their normal backoff. Separate requests can proceed without replacing each other's work.
 
 ## Status Values
 

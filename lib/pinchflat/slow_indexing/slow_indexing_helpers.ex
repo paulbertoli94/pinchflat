@@ -21,6 +21,7 @@ defmodule Pinchflat.SlowIndexing.SlowIndexingHelpers do
   alias Pinchflat.SlowIndexing.FileFollowerServer
   alias Pinchflat.Downloading.DownloadOptionBuilder
   alias Pinchflat.SlowIndexing.MediaCollectionIndexingWorker
+  alias Pinchflat.SlowIndexing.MediaIndexingWorker
 
   alias Pinchflat.YtDlp.Media, as: YtDlpMedia
 
@@ -90,6 +91,40 @@ defmodule Pinchflat.SlowIndexing.SlowIndexingHelpers do
   Returns [%MediaItem{} | %Ecto.Changeset{}]
   """
   def index_and_enqueue_download_for_media_items(%Source{} = source, opts \\ []) do
+    if source.collection_type == :playlist && !Keyword.get(opts, :was_forced, false) do
+      index_new_playlist_items(source)
+    else
+      index_full_collection(source, opts)
+    end
+  end
+
+  defp index_new_playlist_items(source) do
+    use_cookies = Sources.use_cookies?(source, :indexing)
+    {:ok, ids} = MediaCollection.get_media_ids_for_collection(source.original_url, use_cookies: use_cookies)
+
+    known_ids =
+      MediaItem
+      |> where(source_id: ^source.id)
+      |> select([media], media.media_id)
+      |> Repo.all()
+      |> MapSet.new()
+
+    ids
+    |> Enum.reject(&MapSet.member?(known_ids, &1))
+    |> Enum.each(fn id ->
+      case MediaIndexingWorker.kickoff_with_task(source, id) do
+        {:ok, _} -> :ok
+        {:error, :duplicate_job} -> :ok
+        error -> raise "Could not enqueue playlist item: #{inspect(error)}"
+      end
+    end)
+
+    {:ok, _} = Sources.update_source(source, %{last_indexed_at: DateTime.utc_now()})
+    DownloadingHelpers.enqueue_pending_download_tasks(source)
+    []
+  end
+
+  defp index_full_collection(source, opts) do
     # The media_profile is needed to determine the quality options to _then_ determine a more
     # accurate predicted filepath
     source = Repo.preload(source, [:media_profile])

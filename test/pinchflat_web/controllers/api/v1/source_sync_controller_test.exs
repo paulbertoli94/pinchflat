@@ -9,6 +9,7 @@ defmodule PinchflatWeb.Api.V1.SourceSyncControllerTest do
   alias Pinchflat.Settings
   alias Pinchflat.Downloading.MediaDownloadWorker
   alias Pinchflat.SlowIndexing.MediaCollectionIndexingWorker
+  alias Pinchflat.SlowIndexing.MediaSyncWorker
 
   @token "test-api-token"
   @youtube_id "LdQU46djcAA"
@@ -136,7 +137,7 @@ defmodule PinchflatWeb.Api.V1.SourceSyncControllerTest do
       assert %{"expected_youtube_ids" => [@youtube_id]} = json_response(conn, 202)
     end
 
-    test "enqueues source indexing with force", %{conn: conn} do
+    test "indexes only the requested video without scanning the playlist", %{conn: conn} do
       source = playlist_source_fixture()
 
       assert [] = all_enqueued(worker: MediaCollectionIndexingWorker)
@@ -145,8 +146,9 @@ defmodule PinchflatWeb.Api.V1.SourceSyncControllerTest do
       |> api_auth()
       |> post("/api/v1/sources/#{source.id}/sync", %{youtube_ids: [@youtube_id]})
 
-      assert [job] = all_enqueued(worker: MediaCollectionIndexingWorker)
-      assert job.args == %{"id" => source.id, "force" => true}
+      assert [] = all_enqueued(worker: MediaCollectionIndexingWorker)
+      assert [job] = all_enqueued(worker: MediaSyncWorker)
+      assert job.args == %{"source_id" => source.id, "youtube_ids" => [@youtube_id], "verify_membership" => true}
     end
 
     test "repeated sync calls do not leave duplicate indexing jobs", %{conn: conn} do
@@ -156,7 +158,33 @@ defmodule PinchflatWeb.Api.V1.SourceSyncControllerTest do
       post(authed_conn, "/api/v1/sources/#{source.id}/sync", %{youtube_ids: [@youtube_id]})
       post(authed_conn, "/api/v1/sources/#{source.id}/sync", %{youtube_ids: [@youtube_id]})
 
-      assert [_job] = all_enqueued(worker: MediaCollectionIndexingWorker)
+      assert [_job] = all_enqueued(worker: MediaSyncWorker)
+      assert [] = all_enqueued(worker: MediaCollectionIndexingWorker)
+    end
+
+    test "preserves existing playlist scans and indexes distinct requests", %{conn: conn} do
+      source = playlist_source_fixture()
+      {:ok, scan} = Oban.insert(MediaCollectionIndexingWorker.new(%{id: source.id}))
+      authed_conn = api_auth(conn)
+
+      post(authed_conn, "/api/v1/sources/#{source.id}/sync", %{youtube_ids: [@youtube_id]})
+      post(authed_conn, "/api/v1/sources/#{source.id}/sync", %{youtube_ids: ["abcdefghijk"]})
+
+      assert [scan_job] = all_enqueued(worker: MediaCollectionIndexingWorker)
+      assert scan_job.id == scan.id
+      assert length(all_enqueued(worker: MediaSyncWorker)) == 2
+    end
+
+    test "does no work for an already downloaded video", %{conn: conn} do
+      source = playlist_source_fixture()
+      media_item_fixture(source_id: source.id, media_id: @youtube_id, media_downloaded_at: now())
+
+      conn = conn |> api_auth() |> post("/api/v1/sources/#{source.id}/sync", %{youtube_ids: [@youtube_id]})
+
+      assert %{"status" => "queued"} = json_response(conn, 202)
+      assert [] = all_enqueued(worker: MediaSyncWorker)
+      assert [] = all_enqueued(worker: MediaDownloadWorker)
+      assert [] = all_enqueued(worker: MediaCollectionIndexingWorker)
     end
   end
 
@@ -172,7 +200,7 @@ defmodule PinchflatWeb.Api.V1.SourceSyncControllerTest do
       assert %{"error" => %{"code" => "google_not_connected"}} = json_response(conn, 409)
     end
 
-    test "adds videos to the YouTube playlist and queues source indexing", %{conn: conn} do
+    test "adds videos to the YouTube playlist and indexes only those videos", %{conn: conn} do
       source = playlist_source_fixture(collection_id: "PL123")
 
       {:ok, _setting} =
@@ -216,8 +244,9 @@ defmodule PinchflatWeb.Api.V1.SourceSyncControllerTest do
                "expected_youtube_ids" => [@youtube_id]
              } = json_response(conn, 202)
 
-      assert [job] = all_enqueued(worker: MediaCollectionIndexingWorker)
-      assert job.args == %{"id" => source.id, "force" => true}
+      assert [] = all_enqueued(worker: MediaCollectionIndexingWorker)
+      assert [job] = all_enqueued(worker: MediaSyncWorker)
+      assert job.args == %{"source_id" => source.id, "youtube_ids" => [@youtube_id], "verify_membership" => false}
     end
 
     test "treats videos already in the YouTube playlist as imported", %{conn: conn} do

@@ -44,15 +44,16 @@ defmodule Pinchflat.SlowIndexing.MediaSyncWorker do
     source = Sources.get_source!(source_id)
 
     if source.enabled do
-      with {:ok, allowed_ids} <- allowed_ids(source, ids, Map.get(args, "verify_membership", true)) do
-        Enum.reduce_while(allowed_ids, :ok, fn id, _ ->
-          case MediaIndexingWorker.kickoff_with_task(source, id) do
-            {:ok, _} -> {:cont, :ok}
-            {:error, :duplicate_job} -> {:cont, :ok}
-            error -> {:halt, error}
-          end
-        end)
-      else
+      case allowed_ids(source, ids, Map.get(args, "verify_membership", true)) do
+        {:ok, allowed_ids} ->
+          Enum.reduce_while(allowed_ids, :ok, fn id, _ ->
+            case MediaIndexingWorker.kickoff_with_task(source, id) do
+              {:ok, _} -> {:cont, :ok}
+              {:error, :duplicate_job} -> {:cont, :ok}
+              error -> {:halt, error}
+            end
+          end)
+
         {:error, output, status} -> {:error, {output, status}}
         error -> error
       end

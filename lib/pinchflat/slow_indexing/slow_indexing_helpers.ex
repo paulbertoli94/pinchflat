@@ -120,7 +120,8 @@ defmodule Pinchflat.SlowIndexing.SlowIndexingHelpers do
     end)
 
     {:ok, _} = Sources.update_source(source, %{last_indexed_at: DateTime.utc_now()})
-    DownloadingHelpers.enqueue_pending_download_tasks(source)
+    # Existing failures keep their own retry jobs/backoff. A discovery pass
+    # must not restart every previously failed or manually dequeued download.
     []
   end
 

@@ -516,6 +516,16 @@ defmodule Pinchflat.SlowIndexing.SlowIndexingHelpersTest do
       assert Repo.reload!(source).last_indexed_at == nil
     end
 
+    test "discovery does not restart known failed downloads" do
+      source = source_fixture(collection_type: :playlist)
+      media_item_fixture(source_id: source.id, media_id: "known", media_filepath: nil, last_error: "Video unavailable")
+      expect(YtDlpRunnerMock, :run, fn _, :get_media_ids_for_collection, _, _, _ -> {:ok, "known\n"} end)
+
+      assert [] = SlowIndexingHelpers.index_and_enqueue_download_for_media_items(source)
+      assert [] = all_enqueued(worker: MediaIndexingWorker)
+      assert [] = all_enqueued(worker: MediaDownloadWorker)
+    end
+
     test "a forced playlist refresh still extracts full metadata" do
       source = source_fixture(collection_type: :playlist)
 

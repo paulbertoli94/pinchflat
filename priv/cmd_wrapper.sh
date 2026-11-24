@@ -1,26 +1,37 @@
 #!/usr/bin/env bash
 
-# This script is a wrapper for other programs
-# that ensures they are killed when stdin closes
-# (eg: a job terminates)
+# Give the command its own process group, including children such as
+# yt-dlp's bundled Python process, Deno and ffmpeg. Killing only $! leaves
+# those children running after a job is cancelled.
+# Bash assigns the process group before returning from the background launch.
+# This also avoids a race between stdin closing and an external setsid starting.
+set -m
+"$@" &
+command_pid=$!
+set +m
+watcher_pid=
 
-# Start the program in the background
-exec "$@" &
-pid1=$!
+cleanup() {
+  kill -KILL -- "-$command_pid" 2>/dev/null || :
+  if [[ -n "$watcher_pid" ]]; then
+    kill -KILL "$watcher_pid" 2>/dev/null || :
+    wait "$watcher_pid" 2>/dev/null || :
+  fi
+}
 
-# Silence warnings from here on
-exec >/dev/null 2>&1
+trap cleanup EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+trap 'exit 129' HUP
 
-# Read from stdin in the background and
-# kill running program when stdin closes
-exec 0<&0 $(
-  while read; do :; done
-  kill -KILL $pid1
-) &
-pid2=$!
+# Explicitly preserve stdin for the background watcher; otherwise Bash gives
+# asynchronous commands /dev/null. System.cmd closes this pipe on cancellation.
+(
+  while IFS= read -r; do :; done
+  kill -KILL -- "-$command_pid" 2>/dev/null || :
+) <&0 >/dev/null 2>&1 &
+watcher_pid=$!
 
-# Clean up
-wait $pid1
+wait "$command_pid" 2>/dev/null
 ret=$?
-kill -KILL $pid2
-exit $ret
+exit "$ret"

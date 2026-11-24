@@ -22,6 +22,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Test command cancellation and process cleanup
+        run: python3 tooling/test_cmd_wrapper.py
+
       - name: Pull prebuilt images
         run: docker compose pull
 
